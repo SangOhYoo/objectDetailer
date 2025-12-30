@@ -1,83 +1,110 @@
+"""
+core/geometry.py
+이미지 기하학 처리 모듈
+- 1도 단위 정밀 회전 (Fine Rotation)
+- 해부학적 구조 검증 (Anatomy Check)
+- 심리스 합성 (Seamless Composite)
+"""
+
 import cv2
 import numpy as np
+import math
 
-def align_and_crop_with_rotation(image, bbox, landmarks, target_size=512, padding=0.5):
+def get_rotation_angle(kps):
     """
-    [성공 패턴] 랜드마크를 기반으로 얼굴 각도를 계산하여 정방향으로 회전 및 크롭합니다.
+    InsightFace 랜드마크(눈)를 기반으로 회전 각도 계산
+    kps: [LeftEye, RightEye, Nose, LeftMouth, RightMouth]
     """
-    if image.shape[2] == 4:
-        image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+    # 왼쪽 눈(0)과 오른쪽 눈(1)
+    l_eye = kps[0]
+    r_eye = kps[1]
+    
+    # 각도 계산 (Atan2)
+    dy = r_eye[1] - l_eye[1]
+    dx = r_eye[0] - l_eye[0]
+    angle = math.degrees(math.atan2(dy, dx))
+    return angle
 
-    # 1. 눈 위치를 기준으로 회전 각도 계산
-    # landmarks[0]: 왼쪽 눈, landmarks[1]: 오른쪽 눈
-    left_eye = landmarks[0]
-    right_eye = landmarks[1]
+def is_anatomically_correct(kps):
+    """
+    [해부학 검증] 눈, 코, 입의 상대적 위치가 올바른지 확인 (괴물 얼굴 필터링)
+    회전 보정(Align)이 선행된 좌표계에서 판단해야 정확함.
+    """
+    if kps is None: return False
     
-    dx = right_eye[0] - left_eye[0]
-    dy = right_eye[1] - left_eye[1]
+    # Y좌표 기준: 눈 < 코 < 입 (이미지 좌표계는 아래로 갈수록 값이 큼)
+    l_eye_y, r_eye_y = kps[0][1], kps[1][1]
+    nose_y = kps[2][1]
+    mouth_y = (kps[3][1] + kps[4][1]) / 2 # 입 중앙
     
-    # 두 눈 사이의 각도 계산 (라디안 -> 도)
-    angle = np.degrees(np.arctan2(dy, dx))
+    eyes_center_y = (l_eye_y + r_eye_y) / 2
     
-    # 2. 박스 중심 및 크기 계산
+    # 1. 코가 눈보다 아래에 있는가?
+    check1 = nose_y > eyes_center_y
+    # 2. 입이 코보다 아래에 있는가?
+    check2 = mouth_y > nose_y
+    
+    return check1 and check2
+
+def align_and_crop(image, bbox, kps=None, target_size=512, padding=0.25, force_rotate=False):
+    """
+    얼굴을 잘라내고, 필요시 회전하여 정자세(0도)로 만듭니다.
+    반환값: cropped_img, M (변환행렬)
+    """
     x1, y1, x2, y2 = map(int, bbox)
     w, h = x2 - x1, y2 - y1
     cx, cy = x1 + w // 2, y1 + h // 2
-    side = int(max(w, h) * (1 + padding))
     
-    # 3. 회전이 포함된 변환 행렬 M 생성
-    # 중심(cx, cy)을 기준으로 -angle만큼 회전하고 크기를 맞춤
-    M = cv2.getRotationMatrix2D((cx, cy), angle, target_size / side)
+    # 패딩 적용한 크기
+    crop_size = int(max(w, h) * (1 + padding))
     
-    # 변환 행렬의 이동(Translation) 성분 조정하여 target_size 중앙에 배치
+    angle = 0.0
+    if force_rotate and kps is not None:
+        angle = get_rotation_angle(kps)
+
+    # 변환 행렬 (Rotation + Translation)
+    # 중심점(cx, cy)을 기준으로 angle만큼 회전하고, target_size로 스케일링
+    M = cv2.getRotationMatrix2D((cx, cy), angle, target_size / crop_size)
+    
+    # 이동(Translation) 성분 조정: 결과 이미지의 중앙으로 오도록
     M[0, 2] += (target_size / 2) - cx
     M[1, 2] += (target_size / 2) - cy
     
-    # 4. 이미지 변환 (이제 얼굴은 정방향이 됨)
-    cropped = cv2.warpAffine(image, M, (target_size, target_size), flags=cv2.INTER_LINEAR)
+    # 워핑 실행
+    aligned = cv2.warpAffine(image, M, (target_size, target_size), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
     
-    return cropped, M
+    return aligned, M
 
-# composite_seamless 함수는 기존과 동일하게 사용합니다.
-# M_inv(역행렬)가 이미 포함되어 있어, M에 회전이 들어가면 복원 시 자동으로 원상태로 돌아옵니다.
-
-
-def align_and_crop(image, bbox, target_size=512, padding=0.5):
-    """탐지된 박스를 기반으로 얼굴을 정렬하고 크롭합니다."""
-    # 원본이 4채널(RGBA)인 경우 3채널(BGR)로 변환하여 처리
-    if image.shape[2] == 4:
-        image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-        
-    x1, y1, x2, y2 = map(int, bbox)
-    w, h = x2 - x1, y2 - y1
-    cx, cy = x1 + w // 2, y1 + h // 2
-    side = int(max(w, h) * (1 + padding))
+def restore_and_paste(base_image, processed_crop, M, mask_blur=12):
+    """
+    처리된 얼굴(정자세)을 역변환(Inverse)하여 원래 각도로 돌리고 합성합니다.
+    """
+    h, w = base_image.shape[:2]
+    crop_h, crop_w = processed_crop.shape[:2]
     
-    src_pts = np.array([[cx - side//2, cy - side//2], 
-                        [cx + side//2, cy - side//2], 
-                        [cx - side//2, cy + side//2]], dtype=np.float32)
-    dst_pts = np.array([[0, 0], [target_size, 0], [0, target_size]], dtype=np.float32)
-    M = cv2.getAffineTransform(src_pts, dst_pts)
-    cropped = cv2.warpAffine(image, M, (target_size, target_size), flags=cv2.INTER_LINEAR)
-    
-    return cropped, M
-
-def composite_seamless(base_img, detail_img, mask, M):
-    """Alpha Blending 시 채널 수를 일치시켜 ValueError를 방지합니다."""
-    # [해결] base_img가 4채널(RGBA)이면 3채널(BGR)로 변환
-    if base_img.shape[2] == 4:
-        base_img = cv2.cvtColor(base_img, cv2.COLOR_BGRA2BGR)
-
-    mask_blur = cv2.GaussianBlur(mask, (21, 21), 11)
-    mask_alpha = mask_blur.astype(float) / 255.0
-    if len(mask_alpha.shape) == 2:
-        mask_alpha = cv2.merge([mask_alpha, mask_alpha, mask_alpha])
-
-    h, w = base_img.shape[:2]
+    # 1. 역행렬 계산 (Invert Affine)
     M_inv = cv2.invertAffineTransform(M)
-    restored_img = cv2.warpAffine(detail_img, M_inv, (w, h), borderMode=cv2.BORDER_REFLECT)
-
-    # 이제 (344, 516, 3)으로 형상이 일치하여 연산이 가능합니다
-    blended = base_img.astype(float) * (1.0 - mask_alpha) + restored_img.astype(float) * mask_alpha
     
-    return np.clip(blended, 0, 255).astype(np.uint8)
+    # 2. 처리된 이미지를 원본 크기 캔버스에 역회전하여 배치
+    # borderMode=TRANSPARENT로 하면 배경은 투명하게 됨 (혹은 0)
+    restored_patch = cv2.warpAffine(processed_crop, M_inv, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+    
+    # 3. 마스크 생성 (사각형 White Mask -> 역회전)
+    mask = np.full((crop_h, crop_w), 255, dtype=np.uint8)
+    # 가장자리 블러링을 위해 안쪽으로 살짝 줄임
+    border = mask_blur
+    cv2.rectangle(mask, (0, 0), (crop_w, crop_h), 0, border * 2) 
+    # 역회전된 마스크 (원본 이미지 위에서의 영역)
+    warped_mask = cv2.warpAffine(mask, M_inv, (w, h), flags=cv2.INTER_LINEAR)
+    
+    # 4. 마스크 블러링 (Soft Edge)
+    warped_mask = cv2.GaussianBlur(warped_mask, (mask_blur*2+1, mask_blur*2+1), 0)
+    
+    # 5. 알파 블렌딩
+    mask_alpha = warped_mask.astype(float) / 255.0
+    if len(base_image.shape) == 3:
+        mask_alpha = np.expand_dims(mask_alpha, axis=2)
+        
+    final_img = base_image.astype(float) * (1.0 - mask_alpha) + restored_patch.astype(float) * mask_alpha
+    
+    return np.clip(final_img, 0, 255).astype(np.uint8)

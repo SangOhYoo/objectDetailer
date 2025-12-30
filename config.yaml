@@ -1,0 +1,25 @@
+system:
+  gpu_detect: "cuda:0"
+  gpu_generate: "cuda:1"
+  log_level: "DEBUG"
+
+paths:
+  # [외부 경로 설정]
+  checkpoint: "D:/AI_Models/Stable-diffusion"
+  sam: "D:/AI_Models/adetailer"  # <-- 여기에 sam3.pt가 있다고 명시
+  vae: "D:/AI_Models/VAE"
+  lora: "D:/AI_Models/Lora"
+  controlnet: "D:/AI_Models/ControlNet"
+
+files:
+  checkpoint_file: "henmix_real_v6b-fp16-no-ema.safetensors"
+  sam_file: "sam3.pt"                  # <-- 파일명
+  sam_config: "eval_base.yaml"  # 설정 파일명 (소스 코드 내 존재)
+  vae_file: "vae-ft-mse-840000-ema-pruned.ckpt.vae.pt"
+  controlnet_tile: "control_v11f1e_sd15_tile.pth"
+
+defaults:
+  resolution: 512
+  padding: 1.5
+  denoise: 0.4
+  controlnet_weight: 0.5

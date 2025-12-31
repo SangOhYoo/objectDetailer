@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt
 
 class AdetailerUnitWidget(QWidget):
     """
-    Bing-su/adetailer의 단일 Unit UI를 이식하고 BMAB 기능을 확장한 클래스.
+    Bing-su/adetailer의 단일 Unit UI를 이식하고 BMAB/SAM 기능을 확장한 클래스.
     설정값(Config)을 생성하여 Worker에게 전달하는 역할을 수행함.
     """
     def __init__(self, unit_name="1st"):
@@ -84,13 +84,18 @@ class AdetailerUnitWidget(QWidget):
         # --- D. Detailed Settings (Tabs) ---
         settings_tabs = QTabWidget()
 
-        # Tab 1: Detection
+        # Tab 1: Detection (SAM Option Added)
         tab_detect = QWidget()
         detect_layout = QFormLayout(tab_detect)
         self.spin_conf = self._create_spin(0.0, 1.0, 0.3, 0.05)
+        self.chk_use_sam = QCheckBox("Use SAM (Auto-Masking)")
+        self.chk_use_sam.setToolTip("활성화 시 Box 대신 SAM을 사용하여 정밀한 누끼 마스크를 생성합니다.")
+        
         self.spin_min_area = self._create_spin(0.0, 1.0, 0.0, 0.01)
         self.spin_max_area = self._create_spin(0.0, 1.0, 1.0, 0.01)
+        
         detect_layout.addRow("Detection confidence:", self.spin_conf)
+        detect_layout.addRow("Use Segment Anything:", self.chk_use_sam)
         detect_layout.addRow("Mask min area ratio:", self.spin_min_area)
         detect_layout.addRow("Mask max area ratio:", self.spin_max_area)
         tab_detect.setLayout(detect_layout)
@@ -109,7 +114,7 @@ class AdetailerUnitWidget(QWidget):
         mask_layout.addRow("Mask merge mode:", self.combo_merge)
         tab_mask.setLayout(mask_layout)
 
-        # Tab 3: Inpainting
+        # Tab 3: Inpainting (Dynamic Denoise is implicit/auto in worker)
         tab_inpaint = QWidget()
         inpaint_layout = QFormLayout(tab_inpaint)
         self.spin_blur = self._create_spin(0, 64, 4, 1)
@@ -118,8 +123,9 @@ class AdetailerUnitWidget(QWidget):
         self.combo_inpaint_area = QComboBox()
         self.combo_inpaint_area.addItems(["Whole picture", "Masked only"])
         self.combo_inpaint_area.setCurrentIndex(1)
+        
         inpaint_layout.addRow("Mask blur:", self.spin_blur)
-        inpaint_layout.addRow("Denoising strength:", self.spin_denoise)
+        inpaint_layout.addRow("Base Denoising strength:", self.spin_denoise)
         inpaint_layout.addRow("Inpaint padding:", self.spin_padding)
         inpaint_layout.addRow("Inpaint area:", self.combo_inpaint_area)
         tab_inpaint.setLayout(inpaint_layout)
@@ -163,8 +169,9 @@ class AdetailerUnitWidget(QWidget):
             "cn_weight": self.spin_cn_weight.value(),
             "lora_model": self.combo_lora.currentText(),
             "lora_scale": self.spin_lora_scale.value(),
-            # Detection
+            # Detection & SAM
             "conf": self.spin_conf.value(),
+            "use_sam": self.chk_use_sam.isChecked(),
             "min_area": self.spin_min_area.value(),
             "max_area": self.spin_max_area.value(),
             # Mask

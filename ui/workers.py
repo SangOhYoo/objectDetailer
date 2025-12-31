@@ -201,7 +201,7 @@ class GpuWorker(QThread):
 
         return final_img
 
-    def run_inpaint(self, image, mask, config, strength):
+def run_inpaint(self, image, mask, config, strength):
         """
         [Fix] Crop -> Upscale(512px) -> Inpaint -> Downscale -> Paste
         """

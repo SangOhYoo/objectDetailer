@@ -3,252 +3,264 @@ import os
 from core.config import config_instance as cfg
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QComboBox, QCheckBox, QTextEdit, QGroupBox, 
-                             QFormLayout, QDoubleSpinBox, QSlider, QTabWidget,
-                             QScrollArea, QSpinBox, QRadioButton, QButtonGroup, QGridLayout)
+                             QDoubleSpinBox, QSlider, QScrollArea, QSpinBox, 
+                             QRadioButton, QButtonGroup, QGridLayout)
 from PyQt6.QtCore import Qt
 
 class AdetailerUnitWidget(QWidget):
     def __init__(self, unit_name="패스 1"):
         super().__init__()
         self.unit_name = unit_name
-        self.settings = {}  # Store references to input widgets
+        self.settings = {}  # 위젯 참조 저장
         self.init_ui()
 
     def init_ui(self):
+        # 가로 세로 스크롤 방지를 위해 ScrollArea 속성 조정
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        # 스크롤바 정책: 필요할 때만 표시하지만, 레이아웃 최적화로 최대한 안 뜨게 함
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; }")
         
         content_widget = QWidget()
+        # 전체를 좌우 2열 그리드로 배치
         self.layout = QGridLayout(content_widget)
-        self.layout.setSpacing(15)
+        self.layout.setSpacing(10)
+        self.layout.setContentsMargins(5, 5, 5, 5)
 
         # =================================================
-        # 1. 모델 및 모드 설정 (Model & Mode)
+        # [그룹 1] 모델 및 모드 (좌측 상단)
         # =================================================
-        group_model = QGroupBox("모델 및 모드 설정")
-        layout_model = QVBoxLayout()
+        group_model = QGroupBox("1. 모델 및 모드 설정")
+        layout_model = QGridLayout()
         
-        # Enable Checkbox
-        self.chk_enable = QCheckBox(f"이 탭 활성화 (Enable {self.unit_name})")
-        self.chk_enable.setChecked(True if "1" in self.unit_name else False)
+        self.chk_enable = QCheckBox(f"탭 활성화 ({self.unit_name})")
+        # 설정 파일에서 값 불러오기 시도, 없으면 이름 기반 기본값
+        saved_enable = cfg.get('ui_settings', self.unit_name, 'enabled')
+        self.chk_enable.setChecked(saved_enable if saved_enable is not None else ("1" in self.unit_name))
         
-        # Detection Method (Radio)
-        layout_radio = QHBoxLayout()
-        layout_radio.addWidget(QLabel("감지 방식:"))
-        self.radio_yolo = QRadioButton("YOLO (객체 감지)")
+        self.radio_yolo = QRadioButton("YOLO (객체)")
         self.radio_sam = QRadioButton("SAM3 (세그먼트)")
         self.radio_yolo.setChecked(True)
-        btn_group_method = QButtonGroup(self)
-        btn_group_method.addButton(self.radio_yolo)
-        btn_group_method.addButton(self.radio_sam)
-        layout_radio.addWidget(self.radio_yolo)
-        layout_radio.addWidget(self.radio_sam)
-        layout_radio.addStretch()
+        btn_group = QButtonGroup(self)
+        btn_group.addButton(self.radio_yolo)
+        btn_group.addButton(self.radio_sam)
         
-        # Model Dropdown
         self.combo_model = QComboBox()
-        # Populate from config path
         sam_dir = cfg.get_path('sam')
         if sam_dir and os.path.exists(sam_dir):
             models = [f for f in os.listdir(sam_dir) if f.endswith('.pt') or f.endswith('.pth')]
             self.combo_model.addItems(models)
         else:
             self.combo_model.addItems(["face_yolov8n.pt", "person_yolov8n-seg.pt", "hand_yolov8n.pt"])
+            
+        layout_model.addWidget(self.chk_enable, 0, 0, 1, 2)
+        layout_model.addWidget(QLabel("방식:"), 1, 0)
+        layout_model.addWidget(self.radio_yolo, 1, 1)
+        layout_model.addWidget(self.radio_sam, 1, 2)
+        layout_model.addWidget(QLabel("모델:"), 2, 0)
+        layout_model.addWidget(self.combo_model, 2, 1, 1, 2)
         
-        layout_model.addWidget(self.chk_enable)
-        layout_model.addLayout(layout_radio)
-        layout_model.addWidget(QLabel("YOLO 모델:"))
-        layout_model.addWidget(self.combo_model)
         group_model.setLayout(layout_model)
         self.layout.addWidget(group_model, 0, 0)
 
         # =================================================
-        # 2. 인페인팅 프롬프트 (Prompts)
+        # [그룹 2] 프롬프트 (우측 상단)
         # =================================================
-        group_prompt = QGroupBox("인페인팅 프롬프트")
+        group_prompt = QGroupBox("2. 프롬프트 및 자동화")
         layout_prompt = QVBoxLayout()
         
+        # [BMAP] 자동 프롬프트 주입
+        self.chk_auto_prompt = QCheckBox("✨ 자동 프롬프트 주입 (Auto Injection)")
+        self.chk_auto_prompt.setChecked(True)
+        self.chk_auto_prompt.setStyleSheet("color: #4dabf7; font-weight: bold;")
+
         self.txt_pos = QTextEdit()
-        self.txt_pos.setPlaceholderText("Positive Prompt (e.g., detailed face, high quality...)")
-        self.txt_pos.setMaximumHeight(60)
+        self.txt_pos.setPlaceholderText("Positive Prompt...")
+        self.txt_pos.setMaximumHeight(50)
         
         self.txt_neg = QTextEdit()
-        self.txt_neg.setPlaceholderText("Negative Prompt (e.g., low quality, blurry...)")
-        self.txt_neg.setMaximumHeight(45)
+        self.txt_neg.setPlaceholderText("Negative Prompt...")
+        self.txt_neg.setMaximumHeight(40)
         
+        layout_prompt.addWidget(self.chk_auto_prompt)
         layout_prompt.addWidget(self.txt_pos)
         layout_prompt.addWidget(self.txt_neg)
         group_prompt.setLayout(layout_prompt)
-        self.layout.addWidget(group_prompt, 1, 0)
+        self.layout.addWidget(group_prompt, 0, 1)
 
         # =================================================
-        # 3. 감지 설정 (Detection)
+        # [그룹 3] 감지 및 필터 (좌측 중단)
         # =================================================
-        group_detect = QGroupBox("감지 설정 (Detection)")
+        group_detect = QGroupBox("3. 감지 및 필터 (Detection)")
         layout_detect = QGridLayout()
         
-        # Thresholds
-        self.add_slider_row(layout_detect, 0, "신뢰도(Conf):", "conf", 0.0, 1.0, 0.35, 0.01)
-        self.add_slider_row(layout_detect, 1, "마스크 최소 비율:", "min_area", 0.0, 1.0, 0.0, 0.01)
-        self.add_slider_row(layout_detect, 2, "마스크 최대 비율:", "max_area", 0.0, 1.0, 1.0, 0.01)
+        # [BMAP] 성별 필터, 해부학 검증, 엣지 무시
+        self.combo_gender = QComboBox()
+        self.combo_gender.addItems(["All", "Male", "Female"])
+        self.chk_ignore_edge = QCheckBox("Edge 무시")
+        self.chk_anatomy = QCheckBox("해부학 검증") # Anatomy Check
+        self.chk_anatomy.setChecked(True)
         
-        # Filtering Criteria
-        layout_filter = QHBoxLayout()
-        layout_filter.addWidget(QLabel("필터링 기준:"))
-        self.radio_area = QRadioButton("면적")
-        self.radio_conf = QRadioButton("신뢰도")
-        self.radio_conf.setChecked(True)
-        btn_group_filter = QButtonGroup(self)
-        btn_group_filter.addButton(self.radio_area)
-        btn_group_filter.addButton(self.radio_conf)
-        layout_filter.addWidget(self.radio_area)
-        layout_filter.addWidget(self.radio_conf)
+        layout_detect.addWidget(QLabel("성별:"), 0, 0)
+        layout_detect.addWidget(self.combo_gender, 0, 1)
+        layout_detect.addWidget(self.chk_ignore_edge, 0, 2)
+        layout_detect.addWidget(self.chk_anatomy, 0, 3)
+
+        self.add_slider_row(layout_detect, 1, "신뢰도(Conf):", "conf", 0.0, 1.0, 0.35, 0.01)
+        self.add_slider_row(layout_detect, 2, "최소 크기(%):", "min_face_ratio", 0.0, 0.5, 0.01, 0.01)
         
-        # Top K
-        spin_top_k = QSpinBox()
-        spin_top_k.setValue(0)
-        
-        layout_detect.addLayout(layout_filter, 3, 0, 1, 2)
-        layout_detect.addWidget(QLabel("상위 K개만 사용 (0=전체):"), 4, 0)
-        layout_detect.addWidget(spin_top_k, 4, 1)
-        
+        layout_detect.addWidget(QLabel("최대 검출 수:"), 3, 0)
+        self.spin_top_k = QSpinBox()
+        self.spin_top_k.setValue(20)
+        layout_detect.addWidget(self.spin_top_k, 3, 1)
+
         group_detect.setLayout(layout_detect)
-        self.layout.addWidget(group_detect, 2, 0)
+        self.layout.addWidget(group_detect, 1, 0)
 
         # =================================================
-        # 4. 마스크 전처리 (Mask Preprocessing)
+        # [그룹 4] 마스크 전처리 (우측 중단)
         # =================================================
-        group_mask = QGroupBox("마스크 전처리")
+        group_mask = QGroupBox("4. 마스크 전처리 (Mask)")
         layout_mask = QGridLayout()
         
-        self.add_slider_row(layout_mask, 0, "X축 오프셋:", "x_offset", -200, 200, 0, 1)
-        self.add_slider_row(layout_mask, 1, "Y축 오프셋:", "y_offset", -200, 200, 0, 1)
-        self.add_slider_row(layout_mask, 2, "침식(-)/확장(+):", "dilation", -64, 64, 4, 1)
+        # [BMAP] 자동 회전
+        self.chk_auto_rotate = QCheckBox("🔄 자동 회전 보정 (Auto Rotate)")
+        self.chk_auto_rotate.setChecked(True)
+        self.chk_auto_rotate.setStyleSheet("color: #e67e22; font-weight: bold;")
+        layout_mask.addWidget(self.chk_auto_rotate, 0, 0, 1, 3)
+
+        self.add_slider_row(layout_mask, 1, "침식/확장:", "dilation", -64, 64, 4, 1)
+        self.add_slider_row(layout_mask, 2, "X 오프셋:", "x_offset", -100, 100, 0, 1)
+        self.add_slider_row(layout_mask, 3, "Y 오프셋:", "y_offset", -100, 100, 0, 1)
         
-        layout_merge = QHBoxLayout()
-        layout_merge.addWidget(QLabel("마스크 병합 모드:"))
-        self.radio_merge_none = QRadioButton("없음")
-        self.radio_merge_merge = QRadioButton("병합")
-        self.radio_merge_invert = QRadioButton("병합 후 반전")
-        self.radio_merge_merge.setChecked(True)
-        layout_merge.addWidget(self.radio_merge_none)
-        layout_merge.addWidget(self.radio_merge_merge)
-        layout_merge.addWidget(self.radio_merge_invert)
-        
-        layout_mask.addLayout(layout_merge, 3, 0, 1, 3)
         group_mask.setLayout(layout_mask)
-        self.layout.addWidget(group_mask, 3, 0)
+        self.layout.addWidget(group_mask, 1, 1)
 
         # =================================================
-        # 5. 인페인팅 (Inpainting)
+        # [그룹 5] 인페인팅 설정 (좌측 하단)
         # =================================================
-        group_inpaint = QGroupBox("인페인팅 (Inpainting)")
+        group_inpaint = QGroupBox("5. 인페인팅 설정 (Inpaint)")
         layout_inpaint = QGridLayout()
         
-        self.add_slider_row(layout_inpaint, 0, "마스크 블러:", "blur", 0, 64, 4, 1)
-        self.add_slider_row(layout_inpaint, 1, "디노이징 강도:", "denoise", 0.0, 1.0, 0.4, 0.01)
-        
-        # Inpaint Area
-        layout_area = QHBoxLayout()
-        self.chk_inpaint_mask_only = QCheckBox("마스크 영역만 인페인팅")
-        self.chk_inpaint_mask_only.setChecked(True)
-        self.chk_use_sep_res = QCheckBox("별도 해상도 사용")
-        layout_area.addWidget(self.chk_inpaint_mask_only)
-        layout_area.addWidget(self.chk_use_sep_res)
-        
+        self.add_slider_row(layout_inpaint, 0, "디노이징:", "denoise", 0.0, 1.0, 0.4, 0.01)
+        self.add_slider_row(layout_inpaint, 1, "마스크 블러:", "blur", 0, 64, 12, 1)
         self.add_slider_row(layout_inpaint, 2, "패딩(px):", "padding", 0, 256, 32, 1)
         
-        layout_inpaint.addLayout(layout_area, 3, 0, 1, 3)
-        
-        # Resolution Sliders
-        self.add_slider_row(layout_inpaint, 4, "너비:", "inpaint_width", 64, 2048, 512, 8)
-        self.add_slider_row(layout_inpaint, 5, "높이:", "inpaint_height", 64, 2048, 512, 8)
+        # [BMAP] 색감 보정
+        layout_color = QHBoxLayout()
+        layout_color.addWidget(QLabel("색감 보정:"))
+        self.combo_color_fix = QComboBox()
+        self.combo_color_fix.addItems(["None", "Wavelet", "Adain"])
+        layout_color.addWidget(self.combo_color_fix)
+        layout_inpaint.addLayout(layout_color, 3, 0, 1, 3)
 
         group_inpaint.setLayout(layout_inpaint)
-        self.layout.addWidget(group_inpaint, 0, 1)
+        self.layout.addWidget(group_inpaint, 2, 0)
 
         # =================================================
-        # 6. 고급 모델 설정 (Advanced)
+        # [그룹 6] ControlNet & BMAP (우측 하단)
         # =================================================
-        group_adv = QGroupBox("고급 모델 설정")
+        group_adv = QGroupBox("6. ControlNet & BMAP")
         layout_adv = QGridLayout()
         
-        # Checkboxes and Sliders mixed
-        self.chk_sep_steps = QCheckBox("별도 단계 사용")
-        layout_adv.addWidget(self.chk_sep_steps, 0, 0)
-        self.add_slider_row(layout_adv, 0, "단계(Steps):", "steps", 1, 150, 20, 1, start_col=1)
+        self.combo_cn_model = QComboBox()
+        self.combo_cn_model.addItem("None")
+        cn_dir = cfg.get_path('controlnet')
+        if cn_dir and os.path.exists(cn_dir):
+            self.combo_cn_model.addItems([f for f in os.listdir(cn_dir)])
         
-        self.chk_sep_cfg = QCheckBox("별도 CFG 사용")
-        layout_adv.addWidget(self.chk_sep_cfg, 1, 0)
-        self.add_slider_row(layout_adv, 1, "CFG 스케일:", "cfg_scale", 1.0, 30.0, 7.0, 0.5, start_col=1)
+        layout_adv.addWidget(QLabel("CN 모델:"), 0, 0)
+        layout_adv.addWidget(self.combo_cn_model, 0, 1, 1, 2)
         
-        self.chk_sep_ckpt = QCheckBox("별도 체크포인트 사용")
+        self.add_slider_row(layout_adv, 1, "CN 가중치:", "cn_weight", 0.0, 2.0, 1.0, 0.1)
+        
+        # [BMAP] Hires Fix & 별도 노이즈
+        self.chk_hires = QCheckBox("Hires Fix")
+        self.chk_sep_noise = QCheckBox("별도 노이즈")
+        layout_adv.addWidget(self.chk_hires, 2, 0)
+        layout_adv.addWidget(self.chk_sep_noise, 2, 1)
+        
+        # [BMAP] Upscale & Noise Multiplier
+        self.add_slider_row(layout_adv, 3, "업스케일:", "upscale_factor", 1.0, 2.0, 1.5, 0.1)
+        self.add_slider_row(layout_adv, 4, "노이즈 배율:", "noise_mult", 0.5, 1.5, 1.0, 0.05)
+        
+        group_adv.setLayout(layout_adv)
+        self.layout.addWidget(group_adv, 2, 1)
+
+        # =================================================
+        # [그룹 7] 개별 패스 고급 설정 (기존 소스 복구) - 하단 전체 사용
+        # =================================================
+        group_override = QGroupBox("7. 개별 패스 고급 설정 (Advanced Overrides) - 기존 기능 복구")
+        layout_override = QGridLayout()
+        layout_override.setContentsMargins(5, 5, 5, 5)
+
+        # (1) Checkpoint & VAE Override
+        self.chk_sep_ckpt = QCheckBox("체크포인트 변경")
         self.combo_sep_ckpt = QComboBox()
         self.combo_sep_ckpt.addItem("Use Global")
         ckpt_dir = cfg.get_path('checkpoint')
         if ckpt_dir and os.path.exists(ckpt_dir):
             self.combo_sep_ckpt.addItems([f for f in os.listdir(ckpt_dir) if f.endswith(('.ckpt', '.safetensors'))])
-            
-        layout_adv.addWidget(self.chk_sep_ckpt, 2, 0)
-        layout_adv.addWidget(self.combo_sep_ckpt, 2, 1, 1, 2)
         
-        self.chk_sep_vae = QCheckBox("별도 VAE 사용")
+        self.chk_sep_vae = QCheckBox("VAE 변경")
         self.combo_sep_vae = QComboBox()
         self.combo_sep_vae.addItem("Use Global")
         vae_dir = cfg.get_path('vae')
         if vae_dir and os.path.exists(vae_dir):
             self.combo_sep_vae.addItems([f for f in os.listdir(vae_dir) if f.endswith(('.pt', '.ckpt', '.safetensors'))])
 
-        layout_adv.addWidget(self.chk_sep_vae, 3, 0)
-        layout_adv.addWidget(self.combo_sep_vae, 3, 1, 1, 2)
+        layout_override.addWidget(self.chk_sep_ckpt, 0, 0)
+        layout_override.addWidget(self.combo_sep_ckpt, 0, 1)
+        layout_override.addWidget(self.chk_sep_vae, 0, 2)
+        layout_override.addWidget(self.combo_sep_vae, 0, 3)
 
-        self.chk_sep_sampler = QCheckBox("별도 샘플러 사용")
+        # (2) Sampler & Steps & CFG
+        self.chk_sep_sampler = QCheckBox("샘플러 변경")
         self.combo_sep_sampler = QComboBox()
-        self.combo_sep_sampler.addItems(["Euler a", "DPM++ 2M"])
+        self.combo_sep_sampler.addItems(["Euler a", "DPM++ 2M", "DPM++ SDE", "DDIM"])
         self.combo_sep_scheduler = QComboBox()
-        self.combo_sep_scheduler.addItems(["Karras", "Exponential"])
-        layout_adv.addWidget(self.chk_sep_sampler, 4, 0)
-        layout_adv.addWidget(self.combo_sep_sampler, 4, 1)
-        layout_adv.addWidget(self.combo_sep_scheduler, 4, 2)
+        self.combo_sep_scheduler.addItems(["Karras", "Exponential", "Automatic"])
 
-        # Noise Multiplier / Clip Skip
-        self.chk_sep_noise = QCheckBox("별도 노이즈 사용")
-        layout_adv.addWidget(self.chk_sep_noise, 5, 0)
-        self.add_slider_row(layout_adv, 5, "노이즈 배율:", "noise_mult", 0.5, 1.5, 1.0, 0.05, start_col=1)
+        self.chk_sep_steps = QCheckBox("Steps")
+        self.spin_sep_steps = QSpinBox()
+        self.spin_sep_steps.setRange(1, 150)
+        self.spin_sep_steps.setValue(20)
 
-        self.chk_sep_clip = QCheckBox("별도 클립 건너뛰기")
-        layout_adv.addWidget(self.chk_sep_clip, 6, 0)
-        self.add_slider_row(layout_adv, 6, "클립 건너뛰기:", "clip_skip", 1, 12, 1, 1, start_col=1)
+        self.chk_sep_cfg = QCheckBox("CFG")
+        self.spin_sep_cfg = QDoubleSpinBox()
+        self.spin_sep_cfg.setRange(1.0, 30.0)
+        self.spin_sep_cfg.setValue(7.0)
         
-        self.chk_restore_face = QCheckBox("작업 후 얼굴 보정 (Restore Face)")
-        layout_adv.addWidget(self.chk_restore_face, 7, 0, 1, 3)
-
-        group_adv.setLayout(layout_adv)
-        self.layout.addWidget(group_adv, 1, 1)
-
-        # =================================================
-        # 7. 컨트롤넷 (ControlNet)
-        # =================================================
-        group_cn = QGroupBox("컨트롤넷 (ControlNet)")
-        layout_cn = QGridLayout()
+        layout_override.addWidget(self.chk_sep_sampler, 1, 0)
+        layout_override.addWidget(self.combo_sep_sampler, 1, 1)
+        layout_override.addWidget(self.combo_sep_scheduler, 1, 2)
         
-        layout_cn.addWidget(QLabel("모델:"), 0, 0)
-        self.combo_cn_model = QComboBox()
-        self.combo_cn_model.addItem("None")
-        cn_dir = cfg.get_path('controlnet')
-        if cn_dir and os.path.exists(cn_dir):
-            self.combo_cn_model.addItems([f for f in os.listdir(cn_dir) if f.endswith(('.pth', '.safetensors'))])
-        layout_cn.addWidget(self.combo_cn_model, 0, 1, 1, 2)
-        
-        self.add_slider_row(layout_cn, 1, "가중치:", "cn_weight", 0.0, 2.0, 1.0, 0.05)
-        self.add_slider_row(layout_cn, 2, "가이던스 시작:", "cn_start", 0.0, 1.0, 0.0, 0.01)
-        self.add_slider_row(layout_cn, 3, "가이던스 끝:", "cn_end", 0.0, 1.0, 1.0, 0.01)
-        
-        group_cn.setLayout(layout_cn)
-        self.layout.addWidget(group_cn, 4, 0)
+        # Steps/CFG compact
+        layout_sub = QHBoxLayout()
+        layout_sub.addWidget(self.chk_sep_steps)
+        layout_sub.addWidget(self.spin_sep_steps)
+        layout_sub.addWidget(self.chk_sep_cfg)
+        layout_sub.addWidget(self.spin_sep_cfg)
+        layout_override.addLayout(layout_sub, 1, 3)
 
-        self.layout.setRowStretch(5, 1)
+        # (3) Clip Skip & Restore Face
+        self.chk_sep_clip = QCheckBox("Clip Skip")
+        self.spin_clip = QSpinBox()
+        self.spin_clip.setRange(1, 12)
+        self.spin_clip.setValue(2)
+        
+        self.chk_restore_face = QCheckBox("얼굴 보정(Restore Face)")
+        
+        layout_override.addWidget(self.chk_sep_clip, 2, 0)
+        layout_override.addWidget(self.spin_clip, 2, 1)
+        layout_override.addWidget(self.chk_restore_face, 2, 2, 1, 2)
+
+        group_override.setLayout(layout_override)
+        # 하단 전체 너비 사용 (0열부터 2칸 차지)
+        self.layout.addWidget(group_override, 3, 0, 1, 2)
+
+        # 레이아웃 균형
         self.layout.setColumnStretch(0, 1)
         self.layout.setColumnStretch(1, 1)
         
@@ -259,11 +271,10 @@ class AdetailerUnitWidget(QWidget):
         outer_layout.addWidget(scroll)
 
     def add_slider_row(self, layout, row, label_text, key, min_val, max_val, default_val, step, start_col=0):
-        """Helper to create Label | Slider | SpinBox row"""
+        """슬라이더와 스핀박스를 연결하는 헬퍼 함수"""
         label = QLabel(label_text)
-        
         slider = QSlider(Qt.Orientation.Horizontal)
-        # Slider works with ints, so scale floats if needed
+        
         is_float = isinstance(default_val, float)
         scale = 100 if is_float else 1
         
@@ -279,8 +290,8 @@ class AdetailerUnitWidget(QWidget):
         spin.setRange(min_val, max_val)
         spin.setValue(default_val)
         spin.setSingleStep(step)
+        spin.setFixedWidth(60) # UI 깨짐 방지
         
-        # Connect signals
         slider.valueChanged.connect(lambda v: spin.setValue(v / scale))
         spin.valueChanged.connect(lambda v: slider.setValue(int(v * scale)))
         
@@ -288,46 +299,56 @@ class AdetailerUnitWidget(QWidget):
         layout.addWidget(slider, row, start_col + 1)
         layout.addWidget(spin, row, start_col + 2)
         
-        # Store reference for get_config
         self.settings[key] = spin
 
     def get_config(self):
-        """UI 요소에서 설정값을 읽어 딕셔너리로 반환"""
+        """현재 UI 상태를 딕셔너리로 반환"""
         cfg = {
             'enabled': self.chk_enable.isChecked(),
             'model': self.combo_model.currentText(),
             'use_sam': self.radio_sam.isChecked(),
+            
+            # --- 기본 기능 및 BMAP 추가 기능 ---
+            'auto_prompt_injection': self.chk_auto_prompt.isChecked(),
+            'gender_filter': self.combo_gender.currentText().split()[0],
+            'ignore_edge_touching': self.chk_ignore_edge.isChecked(),
+            'anatomy_check': self.chk_anatomy.isChecked(),
+            'auto_rotate': self.chk_auto_rotate.isChecked(),
+            'color_fix': self.combo_color_fix.currentText(),
+            'use_hires_fix': self.chk_hires.isChecked(),
+            
             'pos_prompt': self.txt_pos.toPlainText(),
             'neg_prompt': self.txt_neg.toPlainText(),
-            'merge_mode': "Merge" if self.radio_merge_merge.isChecked() else ("Merge and Invert" if self.radio_merge_invert.isChecked() else "None"),
+            'max_det': self.spin_top_k.value(),
             
-            # Advanced Checkboxes
-            'sep_steps': self.chk_sep_steps.isChecked(),
-            'sep_cfg': self.chk_sep_cfg.isChecked(),
+            'use_controlnet': self.combo_cn_model.currentText() != "None",
+            'cn_model': self.combo_cn_model.currentText(),
+            'sep_noise': self.chk_sep_noise.isChecked(),
+
+            # --- 고급 오버라이드 (복구됨) ---
             'sep_ckpt': self.chk_sep_ckpt.isChecked(),
             'sep_ckpt_name': self.combo_sep_ckpt.currentText(),
             'sep_vae': self.chk_sep_vae.isChecked(),
             'sep_vae_name': self.combo_sep_vae.currentText(),
+            
             'sep_sampler': self.chk_sep_sampler.isChecked(),
             'sampler': f"{self.combo_sep_sampler.currentText()} {self.combo_sep_scheduler.currentText()}",
-            'sep_noise': self.chk_sep_noise.isChecked(),
+            
+            'sep_steps': self.chk_sep_steps.isChecked(),
+            'steps': self.spin_sep_steps.value(),
+            
+            'sep_cfg': self.chk_sep_cfg.isChecked(),
+            'cfg_scale': self.spin_sep_cfg.value(),
+            
             'sep_clip': self.chk_sep_clip.isChecked(),
+            'clip_skip': self.spin_clip.value(),
+            
             'restore_face': self.chk_restore_face.isChecked(),
-            
-            # ControlNet
-            'use_controlnet': self.combo_cn_model.currentText() != "None",
-            'cn_model': self.combo_cn_model.currentText(),
-            
-            # Inpaint Area
-            'inpaint_mask_only': self.chk_inpaint_mask_only.isChecked(),
-            'use_sep_res': self.chk_use_sep_res.isChecked(),
         }
 
-        # Collect values from sliders/spinboxes
+        # 슬라이더 값들 병합
         for key, widget in self.settings.items():
             cfg[key] = widget.value()
             
-        # Default seed (not in UI yet, assume random)
         cfg['seed'] = -1
-        
         return cfg

@@ -4,13 +4,11 @@ import cv2
 import numpy as np
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QTabWidget, QLabel, QPushButton, QSplitter, 
-                             QTextEdit, QComboBox, QGroupBox, QScrollArea,
-                             QFileDialog, QProgressBar, QFrame, QSizePolicy,
-                             QMenu)
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QPixmap, QImage, QAction, QActionGroup
+                             QTextEdit, QComboBox, QGroupBox, QFileDialog, QSizePolicy,
+                             QMenu, QMessageBox)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction, QActionGroup
 
-# 탭 위젯 & 컨트롤러 (기존 유지)
 from ui.main_window_tabs import AdetailerUnitWidget
 from ui.workers import ProcessingController
 from ui.components import ImageCanvas, ComparisonViewer, FileQueueWidget
@@ -20,30 +18,41 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Standalone ADetailer - Dual GPU Edition")
-        self.resize(1600, 1600)
+        self.resize(1600, 1200) # 기본 사이즈
         
         self.controller = None
         
         self.init_ui()
-        # 기본 테마: 다크 모드
-        self.apply_light_theme()
+        self.apply_light_theme() # 기본 테마
 
     def init_ui(self):
         # ============================================================
-        # [Menu Bar] 테마 선택 메뉴 추가
+        # [Menu Bar] 파일 메뉴 & 테마 메뉴
         # ============================================================
         menubar = self.menuBar()
+        
+        # [File Menu]
         file_menu = menubar.addMenu('파일 (File)')
         
-        # 보기 메뉴 -> 테마 서브메뉴
+        action_save_all = QAction('전체 설정 저장 (Save All Configs)', self)
+        action_save_all.triggered.connect(self.save_all_configs)
+        file_menu.addAction(action_save_all)
+        
+        action_save_current = QAction('현재 탭 설정 저장 (Save Current Tab)', self)
+        action_save_current.triggered.connect(self.save_current_tab_config)
+        file_menu.addAction(action_save_current)
+        
+        file_menu.addSeparator()
+        action_exit = QAction('종료 (Exit)', self)
+        action_exit.triggered.connect(self.close)
+        file_menu.addAction(action_exit)
+
+        # [View Menu]
         view_menu = menubar.addMenu('보기 (View)')
         theme_menu = view_menu.addMenu('테마 (Theme)')
         
-        # 테마 액션 그룹 (하나만 선택 가능)
         theme_group = QActionGroup(self)
-        
         self.action_dark = QAction('다크 모드 (Dark)', self, checkable=True)
-        self.action_dark.setChecked(False)
         self.action_dark.triggered.connect(self.apply_dark_theme)
         theme_group.addAction(self.action_dark)
         theme_menu.addAction(self.action_dark)
@@ -54,22 +63,21 @@ class MainWindow(QMainWindow):
         self.action_light.setChecked(True)
         theme_menu.addAction(self.action_light)
         
-        # --- Main Layout ---
-        main_widget = QWidget()
-        self.setCentralWidget(main_widget)
-        main_layout = QHBoxLayout(main_widget)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
+        # ============================================================
+        # [Main Layout] Splitter 적용 (좌우 조절 가능)
+        # ============================================================
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.setCentralWidget(self.splitter)
 
         # ============================================================
         # [Left Panel] Settings
         # ============================================================
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setContentsMargins(10, 10, 10, 10)
         
         # 1. Global Model Settings
-        self.global_group = QGroupBox("🛠️ 기본 모델 설정 (Global Model Settings)")
+        self.global_group = QGroupBox("🛠️ 기본 모델 설정 (Global)")
         global_layout = QHBoxLayout()
         
         self.combo_global_ckpt = QComboBox()
@@ -105,43 +113,47 @@ class MainWindow(QMainWindow):
             self.tabs.addTab(tab, f"패스 {i}")
         
         left_layout.addWidget(self.tabs)
-        left_panel.setMinimumWidth(800)
-        left_panel.setMaximumWidth(950)
+        left_panel.setMinimumWidth(550) # 최소 너비 확보
 
         # ============================================================
         # [Right Panel] Preview & Logs
         # ============================================================
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setContentsMargins(10, 10, 10, 10)
         right_layout.setSpacing(5)
 
-        # 1. Mask Preview
+        # 1. Preview
         self.sub_view = ImageCanvas()
         self.sub_view.setMinimumHeight(300)
 
-        # 2. Comparison Slider (Before / After)
+        # 2. Comparison
         self.compare_view = ComparisonViewer()
         self.compare_view.setMinimumHeight(400)
 
-        # 3. File Queue (Thumbnails & Checkboxes)
+        # 3. Queue
         self.file_queue = FileQueueWidget()
-        self.file_queue.setMinimumHeight(250)
+        self.file_queue.setMinimumHeight(200)
         self.file_queue.file_clicked.connect(self.on_file_clicked)
 
-        # 3. Log
+        # 4. Log
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setMinimumHeight(150)
+        self.log_text.setMaximumHeight(150)
 
-        # 4. Buttons
+        # 5. Buttons
         btn_layout = QHBoxLayout()
         self.btn_load = QPushButton("📁 이미지 불러오기")
         self.btn_load.clicked.connect(self.load_image_dialog)
+        self.btn_load.setMinimumHeight(40)
+        
         self.btn_run = QPushButton("🚀 일괄 실행 (Run Batch)")
         self.btn_run.clicked.connect(self.start_processing)
+        self.btn_run.setMinimumHeight(40)
+        
         self.btn_stop = QPushButton("⏹ 중지")
-        self.btn_stop.clicked.connect(self.stop_processing) # 기능 연결 필요
+        self.btn_stop.clicked.connect(self.stop_processing)
+        self.btn_stop.setMinimumHeight(40)
         
         btn_layout.addWidget(self.btn_load)
         btn_layout.addWidget(self.btn_run)
@@ -150,93 +162,78 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(self.sub_view, 1)
         right_layout.addWidget(self.compare_view, 2)
         right_layout.addWidget(self.file_queue, 1)
-        right_layout.addWidget(self.log_text, 1)
+        right_layout.addWidget(self.log_text, 0)
         right_layout.addLayout(btn_layout)
 
-        main_layout.addWidget(left_panel)
-        main_layout.addWidget(right_panel)
+        # Add to Splitter
+        self.splitter.addWidget(left_panel)
+        self.splitter.addWidget(right_panel)
+        self.splitter.setStretchFactor(0, 4)
+        self.splitter.setStretchFactor(1, 6)
 
         self.statusBar().showMessage("[System] Initialized. Ready.")
 
+    # --- Save Logic ---
+    def save_all_configs(self):
+        """모든 탭의 설정을 config.yaml에 저장"""
+        all_settings = {}
+        for i, tab in enumerate(self.unit_widgets):
+            all_settings[tab.unit_name] = tab.get_config()
+        
+        # 'ui_settings' 키 아래에 저장하여 시스템 설정과 분리
+        success = cfg.save_config({'ui_settings': all_settings})
+        if success:
+            self.log("[Config] All tab settings saved to config.yaml")
+            QMessageBox.information(self, "저장 완료", "모든 탭 설정이 config.yaml에 저장되었습니다.")
+        else:
+            self.log("[Config] Failed to save settings.")
+
+    def save_current_tab_config(self):
+        """현재 선택된 탭의 설정만 저장"""
+        current_idx = self.tabs.currentIndex()
+        if current_idx < 0: return
+        
+        tab = self.unit_widgets[current_idx]
+        current_config = tab.get_config()
+        
+        # 기존 설정 로드 후 업데이트
+        existing_ui_settings = cfg.get('ui_settings') or {}
+        existing_ui_settings[tab.unit_name] = current_config
+        
+        success = cfg.save_config({'ui_settings': existing_ui_settings})
+        if success:
+            self.log(f"[Config] Settings for {tab.unit_name} saved.")
+            QMessageBox.information(self, "저장 완료", f"{tab.unit_name} 설정이 저장되었습니다.")
+
+    # --- Theme & Basics ---
     def apply_dark_theme(self):
-        """다크 모드 스타일시트 적용 (가시성 최적화)"""
         dark_style = """
             QMainWindow, QWidget { background-color: #2b2b2b; color: #eeeeee; font-size: 13px; }
+            QSplitter::handle { background-color: #444; width: 4px; }
             QGroupBox { border: 1px solid #555; margin-top: 15px; border-radius: 4px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #4dabf7; font-weight: bold; }
-            
             QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox { 
                 background-color: #333; border: 1px solid #555; padding: 4px; border-radius: 3px; color: #eee;
             }
-            QComboBox::drop-down { border: none; }
-            
-            QTabWidget::pane { border: 1px solid #444; }
-            QTabBar::tab { background: #333; padding: 8px 12px; margin-right: 2px; color: #aaa; }
-            QTabBar::tab:selected { background: #444; font-weight: bold; border-bottom: 2px solid #4dabf7; color: #fff; }
-            
             QPushButton { background-color: #0078d7; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; }
-            QPushButton:hover { background-color: #1084e0; }
-            QPushButton:pressed { background-color: #006cc1; }
-            
-            QScrollBar:vertical { background: #2b2b2b; width: 12px; }
-            QScrollBar::handle:vertical { background: #555; min-height: 20px; border-radius: 6px; }
-            
-            QMenuBar { background-color: #2b2b2b; color: #eee; }
-            QMenuBar::item:selected { background-color: #444; }
-            QMenu { background-color: #333; border: 1px solid #555; }
-            QMenu::item:selected { background-color: #0078d7; }
-
-            QRadioButton { spacing: 5px; color: #eeeeee; }
-            QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 2px solid #666; background-color: #333; }
-            QRadioButton::indicator:checked { background-color: #4dabf7; border-color: #4dabf7; }
-            QRadioButton::indicator:unchecked:hover { border-color: #888; }
         """
         self.setStyleSheet(dark_style)
-        
-        # 프리뷰 영역 별도 스타일 (어두운 배경 유지)
         self.log_text.setStyleSheet("background-color: #1e1e1e; color: #00ff00; border: 2px solid #c0392b; font-family: Consolas;")
-        
-        # 버튼 스타일 재설정 (중지 버튼 빨간색 유지)
         self.btn_stop.setStyleSheet("background-color: #c0392b; color: white;")
 
     def apply_light_theme(self):
-        """라이트 모드 스타일시트 적용 (가시성 최적화)"""
         light_style = """
             QMainWindow, QWidget { background-color: #f5f5f5; color: #333333; font-size: 13px; }
+            QSplitter::handle { background-color: #ccc; width: 4px; }
             QGroupBox { border: 1px solid #cccccc; margin-top: 15px; border-radius: 4px; background-color: #ffffff; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #0056b3; font-weight: bold; }
-            
             QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox { 
                 background-color: #ffffff; border: 1px solid #cccccc; padding: 4px; border-radius: 3px; color: #333;
             }
-            
-            QTabWidget::pane { border: 1px solid #cccccc; background-color: #ffffff; }
-            QTabBar::tab { background: #e0e0e0; padding: 8px 12px; margin-right: 2px; color: #555; }
-            QTabBar::tab:selected { background: #ffffff; font-weight: bold; border-bottom: 2px solid #0078d7; color: #000; }
-            
             QPushButton { background-color: #0078d7; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; }
-            QPushButton:hover { background-color: #005a9e; }
-            QPushButton:pressed { background-color: #004080; }
-            
-            QScrollBar:vertical { background: #f0f0f0; width: 12px; }
-            QScrollBar::handle:vertical { background: #cccccc; min-height: 20px; border-radius: 6px; }
-
-            QMenuBar { background-color: #e0e0e0; color: #000; }
-            QMenuBar::item:selected { background-color: #cccccc; }
-            QMenu { background-color: #ffffff; border: 1px solid #cccccc; }
-            QMenu::item:selected { background-color: #0078d7; color: white; }
-
-            QRadioButton { spacing: 5px; color: #333333; }
-            QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 2px solid #999; background-color: #fff; }
-            QRadioButton::indicator:checked { background-color: #0078d7; border-color: #0078d7; }
-            QRadioButton::indicator:unchecked:hover { border-color: #555; }
         """
         self.setStyleSheet(light_style)
-        
-        # 프리뷰 영역 별도 스타일 (밝은 배경)
         self.log_text.setStyleSheet("background-color: #ffffff; color: #000000; border: 2px solid #c0392b; font-family: Consolas;")
-        
-        # 버튼 스타일 재설정
         self.btn_stop.setStyleSheet("background-color: #d32f2f; color: white;")
 
     def log(self, message):
@@ -252,16 +249,13 @@ class MainWindow(QMainWindow):
             self.log(f"Added {len(fnames)} files to queue.")
 
     def on_file_clicked(self, file_path):
-        """대기열에서 파일 클릭 시 프리뷰 로드"""
         try:
-            # 한글 경로 지원을 위해 numpy로 로드 후 디코딩
             stream = open(file_path.encode("utf-8"), "rb")
             bytes = bytearray(stream.read())
             numpyarray = np.asarray(bytes, dtype=np.uint8)
             img = cv2.imdecode(numpyarray, cv2.IMREAD_COLOR)
-            
             if img is not None:
-                self.compare_view.set_images(img, img) # Before/After 동일하게 초기화
+                self.compare_view.set_images(img, img)
                 self.sub_view.set_image(img)
         except Exception as e:
             self.log(f"Error loading preview: {e}")
@@ -272,15 +266,14 @@ class MainWindow(QMainWindow):
             self.log("No files to process.")
             return
 
-        # Collect configs from all enabled tabs
         configs = []
         for tab in self.unit_widgets:
-            cfg = tab.get_config()
-            if cfg['enabled']:
-                configs.append(cfg)
+            cfg_data = tab.get_config()
+            if cfg_data['enabled']:
+                configs.append(cfg_data)
 
         if not configs:
-            self.log("No enabled tabs (passes). Please enable at least one pass.")
+            self.log("No enabled tabs. Enable at least one pass.")
             return
 
         self.log("Starting batch processing...")
@@ -290,10 +283,9 @@ class MainWindow(QMainWindow):
         self.controller.start_processing()
 
     def handle_result(self, path, result_img):
-        """처리 결과 수신 시 뷰어 업데이트"""
         self.log(f"Finished: {os.path.basename(path)}")
-        self.sub_view.set_image(result_img) # 실시간 처리 이미지 표현
-        self.compare_view.pixmap_after = self.compare_view._np2pix(result_img) # After 이미지 업데이트
+        self.sub_view.set_image(result_img)
+        self.compare_view.pixmap_after = self.compare_view._np2pix(result_img)
         self.compare_view.update()
 
     def stop_processing(self):

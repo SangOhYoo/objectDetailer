@@ -11,24 +11,27 @@ from PIL import Image
 from core.mask_utils import MaskUtils
 from core.detector import ObjectDetector
 from core.sam_wrapper import SamInference
-from core.config import config_instance as cfg  # Config 싱글톤 임포트
+from core.config import config_instance as cfg
 
 # Diffusers Imports
 from diffusers import (
     StableDiffusionInpaintPipeline,
     StableDiffusionControlNetInpaintPipeline,
     ControlNetModel,
-    AutoencoderKL
+    AutoencoderKL,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    DPMSolverMultistepScheduler,
+    DDIMScheduler
 )
 
-# --- Global Resources ---
-_global_load_lock = threading.Lock() # 모델 로딩 충돌 방지
-_job_queue = Queue() # 작업 대기열
+_global_load_lock = threading.Lock()
+_job_queue = Queue()
 
 class ProcessingController(QObject):
     log_signal = pyqtSignal(str)
-    progress_signal = pyqtSignal(int, int) # current, total
-    result_signal = pyqtSignal(str, np.ndarray) # filepath, image
+    progress_signal = pyqtSignal(int, int)
+    result_signal = pyqtSignal(str, np.ndarray)
     finished_signal = pyqtSignal()
 
     def __init__(self, file_paths, configs):
@@ -40,27 +43,22 @@ class ProcessingController(QObject):
         self.total_files = len(file_paths)
 
     def start_processing(self):
-        # 1. 큐 채우기
         for f in self.file_paths:
             _job_queue.put(f)
 
-        # 2. GPU 감지
         if torch.cuda.is_available():
             gpu_count = torch.cuda.device_count()
             self.log_signal.emit(f"[System] Detected {gpu_count} NVIDIA GPUs.")
         else:
             gpu_count = 1
-            self.log_signal.emit("[System] No GPU detected. Using CPU (Slow).")
+            self.log_signal.emit("[System] No GPU detected. Using CPU.")
 
-        # 3. 워커 생성
         for i in range(gpu_count):
             dev_id = f"cuda:{i}" if torch.cuda.is_available() else "cpu"
             worker = GpuWorker(dev_id, self.configs, worker_id=i)
-            
             worker.log_signal.connect(self.relay_log)
             worker.result_signal.connect(self.handle_result)
             worker.finished_signal.connect(self.check_finished)
-            
             self.workers.append(worker)
             worker.start()
 
@@ -76,7 +74,6 @@ class ProcessingController(QObject):
         if self.processed_count >= self.total_files:
             self.finished_signal.emit()
 
-
 class GpuWorker(QThread):
     log_signal = pyqtSignal(str)
     result_signal = pyqtSignal(str, np.ndarray)
@@ -91,8 +88,6 @@ class GpuWorker(QThread):
         self.pipe = None
         self.sam = None
         
-        # [Config] Detector 초기화 (ADetailer 모델 경로 주입)
-        # 1순위: config의 adetailer 경로, 없으면 sam 경로 등 활용 가능. 여기선 sam 경로 예시.
         model_dir = cfg.get_path('sam') 
         self.detector = ObjectDetector(device=device_id, model_dir=model_dir)
 
@@ -102,30 +97,26 @@ class GpuWorker(QThread):
         while not _job_queue.empty():
             try:
                 fpath = _job_queue.get_nowait()
-            except:
-                break
+            except: break
 
             self.log_signal.emit(f"[Worker-{self.worker_id}] Processing: {os.path.basename(fpath)}")
             try:
-                # [FIX] 한글 경로 이미지 로딩 호환성 수정
                 img_stream = np.fromfile(fpath, np.uint8)
                 img = cv2.imdecode(img_stream, cv2.IMREAD_COLOR)
                 
                 if img is None:
-                    self.log_signal.emit(f"[Worker-{self.worker_id}] Error: Failed to load image.")
+                    self.log_signal.emit(f"[Worker-{self.worker_id}] Error: Load failed.")
                     continue
                 
                 result_img = self.process_image(img)
                 self.result_signal.emit(fpath, result_img)
-                
             except Exception as e:
-                self.log_signal.emit(f"[Worker-{self.worker_id}] Critical Error: {e}")
-                import traceback
-                traceback.print_exc()
+                self.log_signal.emit(f"[Worker-{self.worker_id}] Error: {e}")
+                import traceback; traceback.print_exc()
             finally:
                 _job_queue.task_done()
         
-        self.log_signal.emit(f"[Worker-{self.worker_id}] Task finished.")
+        self.log_signal.emit(f"[Worker-{self.worker_id}] Finished.")
         self.finished_signal.emit()
 
     def process_image(self, image):
@@ -137,7 +128,6 @@ class GpuWorker(QThread):
             unit_name = f"Unit {i+1}"
             self.log_signal.emit(f"  > [Worker-{self.worker_id}] Running {unit_name}...")
             
-            # 파이프라인 및 LoRA 준비
             self.load_sd_model(use_controlnet=config['use_controlnet'])
             self.manage_lora(config, action="load")
 
@@ -152,18 +142,14 @@ class GpuWorker(QThread):
         h, w = image.shape[:2]
         img_area = h * w
         
-        # 1. 탐지
         detections = self.detector.detect(image, config['model'], config['conf'])
         if not detections: return image
 
-        # 2. 면적순 정렬
         detections.sort(key=lambda d: (d['box'][2]-d['box'][0]) * (d['box'][3]-d['box'][1]), reverse=True)
 
-        # 3. SAM 준비 (필요 시)
         if config['use_sam']:
             if self.sam is None:
                 with _global_load_lock:
-                    # [Config] SAM 모델 경로 로드
                     sam_file = cfg.get_path('sam', 'sam_file')
                     self.sam = SamInference(checkpoint=sam_file, device=self.device_id)
             self.sam.set_image(image)
@@ -174,13 +160,11 @@ class GpuWorker(QThread):
             box = det['box']
             x1, y1, x2, y2 = box
             
-            # [FIX] 면적 필터링 (Area Filtering)
             box_area = (x2 - x1) * (y2 - y1)
             ratio = box_area / img_area
             if ratio < config['min_area'] or ratio > config['max_area']:
                 continue
 
-            # 마스크 결정 (SAM > YOLO Seg > Box)
             yolo_mask = det['mask']
             
             if config['use_sam'] and self.sam:
@@ -190,69 +174,68 @@ class GpuWorker(QThread):
             else:
                 mask = MaskUtils.box_to_mask(box, (h, w), padding=0)
 
-            # 마스크 정제
             mask = MaskUtils.refine_mask(mask, dilation=config['dilation'], blur=config['blur'])
-            
-            # BMAB Dynamic Denoising
             final_denoise = self._calc_dynamic_denoise(box, (h, w), config['denoise'])
-            
-            # 인페인팅 수행
             final_img = self.run_inpaint(final_img, mask, config, final_denoise)
 
         return final_img
 
-def run_inpaint(self, image, mask, config, strength):
-        """
-        [Fix] Crop -> Upscale(512px) -> Inpaint -> Downscale -> Paste
-        """
-        # 1. Crop (Context Padding 포함)
+    def _apply_scheduler(self, sampler_name):
+        if self.pipe is None: return
+        config = self.pipe.scheduler.config
+        
+        if "Euler a" in sampler_name:
+            self.pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(config)
+        elif "Euler" in sampler_name:
+            self.pipe.scheduler = EulerDiscreteScheduler.from_config(config)
+        elif "DPM++ 2M" in sampler_name:
+            self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(config, use_karras_sigmas=True)
+        elif "DDIM" in sampler_name:
+            self.pipe.scheduler = DDIMScheduler.from_config(config)
+
+    def run_inpaint(self, image, mask, config, strength):
         padding = config['padding']
         crop_img, (x1, y1, x2, y2) = MaskUtils.crop_image_by_mask(image, mask, context_padding=padding)
         crop_mask = mask[y1:y2, x1:x2]
         
         if crop_img.size == 0: return image
 
-        # --- [NEW] Upscale Logic (High Quality Fix) ---
+        # Upscale Logic (High Quality Fix)
         h_orig, w_orig = crop_img.shape[:2]
-        target_res = 512 # SD 1.5 Standard Resolution
-        
-        # 512보다 작으면 512로 키움 (비율 유지하지 않고 512x512로 맞추는 것이 인페인팅엔 유리할 수 있음, 여기선 비율 유지)
+        target_res = 512
         scale_factor = target_res / max(h_orig, w_orig)
         
-        # 너무 작은 이미지만 키우고, 이미 크면 그대로 둠 (혹은 설정에 따라 다름)
         if max(h_orig, w_orig) < target_res:
             new_w = int(w_orig * scale_factor)
             new_h = int(h_orig * scale_factor)
-            # 8배수 맞춤 (VAE 필수)
             new_w -= new_w % 8
             new_h -= new_h % 8
-            
             proc_img = cv2.resize(crop_img, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
             proc_mask = cv2.resize(crop_mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
         else:
-            # 이미 크더라도 8배수는 맞춰야 함
             new_w = w_orig - (w_orig % 8)
             new_h = h_orig - (h_orig % 8)
             proc_img = crop_img[:new_h, :new_w]
             proc_mask = crop_mask[:new_h, :new_w]
-        # ----------------------------------------------
 
-        # 2. Convert to PIL & RGB
         pil_img = Image.fromarray(cv2.cvtColor(proc_img, cv2.COLOR_BGR2RGB))
         pil_mask = Image.fromarray(proc_mask)
 
-        # 3. ControlNet Preprocessing (Canny)
         control_args = {}
         if config['use_controlnet']:
-            # Canny는 리사이즈된 이미지 기준
             canny = cv2.Canny(proc_img, 100, 200)
             canny = np.stack([canny] * 3, axis=-1)
             pil_control = Image.fromarray(canny)
-            
             control_args["control_image"] = pil_control
             control_args["controlnet_conditioning_scale"] = config['cn_weight']
 
-        # 4. Inference
+        # Apply Sampler & Seed
+        self._apply_scheduler(config.get('sampler', 'Euler a'))
+        seed = config.get('seed', -1)
+        generator = torch.Generator(device=self.device_id)
+        if seed != -1:
+            generator.manual_seed(seed)
+
         with torch.inference_mode():
             with torch.autocast(self.device_id.split(':')[0]):
                 output = self.pipe(
@@ -261,19 +244,14 @@ def run_inpaint(self, image, mask, config, strength):
                     image=pil_img,
                     mask_image=pil_mask,
                     strength=strength,
-                    width=new_w,  # 리사이즈된 크기 사용
+                    width=new_w,
                     height=new_h,
+                    generator=generator,
                     **control_args
                 ).images[0]
 
-        # 5. Paste Back (Downscale)
         res_np = cv2.cvtColor(np.array(output), cv2.COLOR_RGB2BGR)
-        
-        # --- [NEW] 원래 크기로 복원 ---
         res_np = cv2.resize(res_np, (w_orig, h_orig), interpolation=cv2.INTER_LANCZOS4)
-        
-        # Alpha Blending for smoother edges (Optional but recommended)
-        # 여기선 단순 붙여넣기 유지 (Mask Blur가 되어있으므로 어느정도 자연스러움)
         image[y1:y2, x1:x2] = res_np
         
         return image
@@ -296,29 +274,20 @@ def run_inpaint(self, image, mask, config, strength):
             if self.pipe: del self.pipe
             torch.cuda.empty_cache()
 
-            # [Config] 모델 경로 로드
             ckpt_path = cfg.get_path('checkpoint', 'checkpoint_file')
             vae_path = cfg.get_path('vae', 'vae_file')
             
-            # ControlNet 로드
             controlnet = None
             if use_controlnet:
                 cn_path = cfg.get_path('controlnet', 'controlnet_tile')
                 if cn_path and os.path.exists(cn_path):
                     controlnet = ControlNetModel.from_single_file(cn_path, torch_dtype=torch.float16)
-                else:
-                    self.log_signal.emit(f"    [Warning] ControlNet not found at {cn_path}")
 
-            # VAE 로드
             vae = None
             if vae_path and os.path.exists(vae_path):
                 vae = AutoencoderKL.from_single_file(vae_path, torch_dtype=torch.float32)
 
-            load_args = {
-                "torch_dtype": torch.float32, 
-                "safety_checker": None,
-                "use_safetensors": True
-            }
+            load_args = {"torch_dtype": torch.float32, "safety_checker": None, "use_safetensors": True}
             if vae: load_args["vae"] = vae
             
             if controlnet:
@@ -345,10 +314,8 @@ def run_inpaint(self, image, mask, config, strength):
 
         try:
             if action == "load":
-                # [Config] LoRA 경로 로드
                 lora_base = cfg.get_path('lora')
                 if not lora_base: return
-                
                 lora_path = os.path.join(lora_base, lora_name)
                 
                 if not os.path.exists(lora_path):

@@ -81,7 +81,8 @@ class ModelManager:
             # Clip Skip 적용
             if clip_skip > 1 and hasattr(self.pipe, 'text_encoder'):
                 # Diffusers 방식: 레이어 슬라이싱
-                self.pipe.text_encoder.text_model.encoder.layers = self.pipe.text_encoder.text_model.encoder.layers[:-clip_skip]
+                # Clip Skip 2 means removing the last 1 layer (using the 2nd to last)
+                self.pipe.text_encoder.text_model.encoder.layers = self.pipe.text_encoder.text_model.encoder.layers[:-(clip_skip - 1)]
 
             # Move to Device
             self.pipe.to(self.device)

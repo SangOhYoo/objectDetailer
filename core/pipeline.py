@@ -36,11 +36,11 @@ class ImageProcessor:
             # 모델 로딩 위임
             # 1. 체크포인트/VAE 경로 결정
             ckpt_path = None
-            if config.get('sep_ckpt') and config.get('sep_ckpt_name'):
+            if config.get('sep_ckpt') and config.get('sep_ckpt_name') and config['sep_ckpt_name'] != "Use Global":
                 ckpt_path = os.path.join(cfg.get_path('checkpoint'), config['sep_ckpt_name'])
             
             vae_path = None
-            if config.get('sep_vae') and config.get('sep_vae_name'):
+            if config.get('sep_vae') and config.get('sep_vae_name') and config['sep_vae_name'] != "Use Global":
                 vae_path = os.path.join(cfg.get_path('vae'), config['sep_vae_name'])
 
             # 2. ControlNet 경로 결정
@@ -142,6 +142,18 @@ class ImageProcessor:
             if 'tile' in cn_model:
                 # Tile 모델은 원본 이미지를 그대로 사용 (혹은 블러)
                 control_args["control_image"] = pil_img
+            elif 'openpose' in cn_model:
+                # OpenPose 지원
+                try:
+                    from controlnet_aux import OpenposeDetector
+                    # 매번 로드하면 느리지만, 현재 구조상 여기서 처리 (추후 캐싱 필요)
+                    openpose = OpenposeDetector.from_pretrained("lllyasviel/ControlNet")
+                    openpose.to(self.device)
+                    pose_img = openpose(pil_img)
+                    control_args["control_image"] = pose_img
+                except ImportError:
+                    print("[Pipeline] Warning: controlnet_aux not found. OpenPose disabled.")
+                    control_args["control_image"] = pil_img # Fallback
             else:
                 # 기본값: Canny (OpenPose 등은 별도 전처리기 필요하나 여기선 Canny로 fallback)
                 canny = cv2.Canny(proc_img, 100, 200)

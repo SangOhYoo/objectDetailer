@@ -1,4 +1,6 @@
 import sys
+import os
+from core.config import config_instance as cfg
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QComboBox, QCheckBox, QTextEdit, QGroupBox, 
                              QFormLayout, QDoubleSpinBox, QSlider, QTabWidget,
@@ -46,7 +48,13 @@ class AdetailerUnitWidget(QWidget):
         
         # Model Dropdown
         self.combo_model = QComboBox()
-        self.combo_model.addItems(["face_yolov8n.pt", "person_yolov8n-seg.pt", "hand_yolov8n.pt", "mediapipe_face_full"])
+        # Populate from config path
+        sam_dir = cfg.get_path('sam')
+        if sam_dir and os.path.exists(sam_dir):
+            models = [f for f in os.listdir(sam_dir) if f.endswith('.pt') or f.endswith('.pth')]
+            self.combo_model.addItems(models)
+        else:
+            self.combo_model.addItems(["face_yolov8n.pt", "person_yolov8n-seg.pt", "hand_yolov8n.pt"])
         
         layout_model.addWidget(self.chk_enable)
         layout_model.addLayout(layout_radio)
@@ -141,32 +149,6 @@ class AdetailerUnitWidget(QWidget):
         self.add_slider_row(layout_inpaint, 0, "마스크 블러:", 0, 64, 4, 1)
         self.add_slider_row(layout_inpaint, 1, "디노이징 강도:", 0.0, 1.0, 0.4, 0.01)
         
-        
-        group_inpaint = QGroupBox("인페인팅 (Inpainting)")
-        layout_inpaint = QGridLayout()
-        
-        self.add_slider_row(layout_inpaint, 0, "마스크 블러:", "blur", 0, 64, 4, 1)
-        self.add_slider_row(layout_inpaint, 1, "디노이징 강도:", "denoise", 0.0, 1.0, 0.4, 0.01)
-        
-        # Inpaint Area
-        layout_area = QHBoxLayout()
-        self.chk_inpaint_mask_only = QCheckBox("마스크 영역만 인페인팅")
-        self.chk_inpaint_mask_only.setChecked(True)
-        self.chk_use_sep_res = QCheckBox("별도 해상도 사용 (Force Resize)")
-        layout_area.addWidget(self.chk_inpaint_mask_only)
-        layout_area.addWidget(self.chk_use_sep_res)
-        
-        self.add_slider_row(layout_inpaint, 2, "패딩(px):", "padding", 0, 256, 32, 1)
-        
-        # Resolution Sliders
-        self.add_slider_row(layout_inpaint, 4, "너비:", "width", 64, 2048, 512, 8)
-        self.add_slider_row(layout_inpaint, 5, "높이:", "height", 64, 2048, 512, 8)
-
-        group_inpaint.setLayout(layout_inpaint)
-        self.layout.addWidget(group_inpaint)
-
-
-
         # Inpaint Area
         layout_area = QHBoxLayout()
         self.chk_inpaint_mask_only = QCheckBox("마스크 영역만 인페인팅")
@@ -204,12 +186,20 @@ class AdetailerUnitWidget(QWidget):
         self.chk_sep_ckpt = QCheckBox("별도 체크포인트 사용")
         self.combo_sep_ckpt = QComboBox()
         self.combo_sep_ckpt.addItem("Use Global")
+        ckpt_dir = cfg.get_path('checkpoint')
+        if ckpt_dir and os.path.exists(ckpt_dir):
+            self.combo_sep_ckpt.addItems([f for f in os.listdir(ckpt_dir) if f.endswith(('.ckpt', '.safetensors'))])
+            
         layout_adv.addWidget(self.chk_sep_ckpt, 2, 0)
         layout_adv.addWidget(self.combo_sep_ckpt, 2, 1, 1, 2)
         
         self.chk_sep_vae = QCheckBox("별도 VAE 사용")
         self.combo_sep_vae = QComboBox()
         self.combo_sep_vae.addItem("Use Global")
+        vae_dir = cfg.get_path('vae')
+        if vae_dir and os.path.exists(vae_dir):
+            self.combo_sep_vae.addItems([f for f in os.listdir(vae_dir) if f.endswith(('.pt', '.ckpt', '.safetensors'))])
+
         layout_adv.addWidget(self.chk_sep_vae, 3, 0)
         layout_adv.addWidget(self.combo_sep_vae, 3, 1, 1, 2)
 
@@ -246,6 +236,9 @@ class AdetailerUnitWidget(QWidget):
         layout_cn.addWidget(QLabel("모델:"), 0, 0)
         self.combo_cn_model = QComboBox()
         self.combo_cn_model.addItem("None")
+        cn_dir = cfg.get_path('controlnet')
+        if cn_dir and os.path.exists(cn_dir):
+            self.combo_cn_model.addItems([f for f in os.listdir(cn_dir) if f.endswith(('.pth', '.safetensors'))])
         layout_cn.addWidget(self.combo_cn_model, 0, 1, 1, 2)
         
         self.add_slider_row(layout_cn, 1, "가중치:", "cn_weight", 0.0, 2.0, 1.0, 0.05)

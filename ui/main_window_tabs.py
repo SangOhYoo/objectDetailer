@@ -9,6 +9,7 @@ class AdetailerUnitWidget(QWidget):
     def __init__(self, unit_name="패스 1"):
         super().__init__()
         self.unit_name = unit_name
+        self.settings = {}  # Store references to input widgets
         self.init_ui()
 
     def init_ui(self):
@@ -80,9 +81,9 @@ class AdetailerUnitWidget(QWidget):
         layout_detect = QGridLayout()
         
         # Thresholds
-        self.add_slider_row(layout_detect, 0, "면적 임계값:", 0.0, 1.0, 0.3, 0.01)
-        self.add_slider_row(layout_detect, 1, "마스크 최소 비율:", 0.0, 1.0, 0.0, 0.01)
-        self.add_slider_row(layout_detect, 2, "마스크 최대 비율:", 0.0, 1.0, 1.0, 0.01)
+        self.add_slider_row(layout_detect, 0, "신뢰도(Conf):", "conf", 0.0, 1.0, 0.35, 0.01)
+        self.add_slider_row(layout_detect, 1, "마스크 최소 비율:", "min_area", 0.0, 1.0, 0.0, 0.01)
+        self.add_slider_row(layout_detect, 2, "마스크 최대 비율:", "max_area", 0.0, 1.0, 1.0, 0.01)
         
         # Filtering Criteria
         layout_filter = QHBoxLayout()
@@ -113,9 +114,9 @@ class AdetailerUnitWidget(QWidget):
         group_mask = QGroupBox("마스크 전처리")
         layout_mask = QGridLayout()
         
-        self.add_slider_row(layout_mask, 0, "X축 오프셋:", -200, 200, 0, 1)
-        self.add_slider_row(layout_mask, 1, "Y축 오프셋:", -200, 200, 0, 1)
-        self.add_slider_row(layout_mask, 2, "침식(-)/확장(+):", -64, 64, 4, 1)
+        self.add_slider_row(layout_mask, 0, "X축 오프셋:", "x_offset", -200, 200, 0, 1)
+        self.add_slider_row(layout_mask, 1, "Y축 오프셋:", "y_offset", -200, 200, 0, 1)
+        self.add_slider_row(layout_mask, 2, "침식(-)/확장(+):", "dilation", -64, 64, 4, 1)
         
         layout_merge = QHBoxLayout()
         layout_merge.addWidget(QLabel("마스크 병합 모드:"))
@@ -140,6 +141,32 @@ class AdetailerUnitWidget(QWidget):
         self.add_slider_row(layout_inpaint, 0, "마스크 블러:", 0, 64, 4, 1)
         self.add_slider_row(layout_inpaint, 1, "디노이징 강도:", 0.0, 1.0, 0.4, 0.01)
         
+        
+        group_inpaint = QGroupBox("인페인팅 (Inpainting)")
+        layout_inpaint = QGridLayout()
+        
+        self.add_slider_row(layout_inpaint, 0, "마스크 블러:", "blur", 0, 64, 4, 1)
+        self.add_slider_row(layout_inpaint, 1, "디노이징 강도:", "denoise", 0.0, 1.0, 0.4, 0.01)
+        
+        # Inpaint Area
+        layout_area = QHBoxLayout()
+        self.chk_inpaint_mask_only = QCheckBox("마스크 영역만 인페인팅")
+        self.chk_inpaint_mask_only.setChecked(True)
+        self.chk_use_sep_res = QCheckBox("별도 해상도 사용 (Force Resize)")
+        layout_area.addWidget(self.chk_inpaint_mask_only)
+        layout_area.addWidget(self.chk_use_sep_res)
+        
+        self.add_slider_row(layout_inpaint, 2, "패딩(px):", "padding", 0, 256, 32, 1)
+        
+        # Resolution Sliders
+        self.add_slider_row(layout_inpaint, 4, "너비:", "width", 64, 2048, 512, 8)
+        self.add_slider_row(layout_inpaint, 5, "높이:", "height", 64, 2048, 512, 8)
+
+        group_inpaint.setLayout(layout_inpaint)
+        self.layout.addWidget(group_inpaint)
+
+
+
         # Inpaint Area
         layout_area = QHBoxLayout()
         self.chk_inpaint_mask_only = QCheckBox("마스크 영역만 인페인팅")
@@ -168,11 +195,11 @@ class AdetailerUnitWidget(QWidget):
         # Checkboxes and Sliders mixed
         self.chk_sep_steps = QCheckBox("별도 단계 사용")
         layout_adv.addWidget(self.chk_sep_steps, 0, 0)
-        self.add_slider_row(layout_adv, 0, "단계(Steps):", 1, 150, 20, 1, start_col=1)
+        self.add_slider_row(layout_adv, 0, "단계(Steps):", "steps", 1, 150, 20, 1, start_col=1)
         
         self.chk_sep_cfg = QCheckBox("별도 CFG 사용")
         layout_adv.addWidget(self.chk_sep_cfg, 1, 0)
-        self.add_slider_row(layout_adv, 1, "CFG 스케일:", 1.0, 30.0, 7.0, 0.5, start_col=1)
+        self.add_slider_row(layout_adv, 1, "CFG 스케일:", "cfg_scale", 1.0, 30.0, 7.0, 0.5, start_col=1)
         
         self.chk_sep_ckpt = QCheckBox("별도 체크포인트 사용")
         self.combo_sep_ckpt = QComboBox()
@@ -198,11 +225,11 @@ class AdetailerUnitWidget(QWidget):
         # Noise Multiplier / Clip Skip
         self.chk_sep_noise = QCheckBox("별도 노이즈 사용")
         layout_adv.addWidget(self.chk_sep_noise, 5, 0)
-        self.add_slider_row(layout_adv, 5, "노이즈 배율:", 0.5, 1.5, 1.0, 0.05, start_col=1)
+        self.add_slider_row(layout_adv, 5, "노이즈 배율:", "noise_mult", 0.5, 1.5, 1.0, 0.05, start_col=1)
 
         self.chk_sep_clip = QCheckBox("별도 클립 건너뛰기")
         layout_adv.addWidget(self.chk_sep_clip, 6, 0)
-        self.add_slider_row(layout_adv, 6, "클립 건너뛰기:", 1, 12, 1, 1, start_col=1)
+        self.add_slider_row(layout_adv, 6, "클립 건너뛰기:", "clip_skip", 1, 12, 1, 1, start_col=1)
         
         self.chk_restore_face = QCheckBox("작업 후 얼굴 보정 (Restore Face)")
         layout_adv.addWidget(self.chk_restore_face, 7, 0, 1, 3)
@@ -221,9 +248,9 @@ class AdetailerUnitWidget(QWidget):
         self.combo_cn_model.addItem("None")
         layout_cn.addWidget(self.combo_cn_model, 0, 1, 1, 2)
         
-        self.add_slider_row(layout_cn, 1, "가중치:", 0.0, 2.0, 1.0, 0.05)
-        self.add_slider_row(layout_cn, 2, "가이던스 시작:", 0.0, 1.0, 0.0, 0.01)
-        self.add_slider_row(layout_cn, 3, "가이던스 끝:", 0.0, 1.0, 1.0, 0.01)
+        self.add_slider_row(layout_cn, 1, "가중치:", "cn_weight", 0.0, 2.0, 1.0, 0.05)
+        self.add_slider_row(layout_cn, 2, "가이던스 시작:", "cn_start", 0.0, 1.0, 0.0, 0.01)
+        self.add_slider_row(layout_cn, 3, "가이던스 끝:", "cn_end", 0.0, 1.0, 1.0, 0.01)
         
         group_cn.setLayout(layout_cn)
         self.layout.addWidget(group_cn)
@@ -236,7 +263,7 @@ class AdetailerUnitWidget(QWidget):
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.addWidget(scroll)
 
-    def add_slider_row(self, layout, row, label_text, min_val, max_val, default_val, step, start_col=0):
+    def add_slider_row(self, layout, row, label_text, key, min_val, max_val, default_val, step, start_col=0):
         """Helper to create Label | Slider | SpinBox row"""
         label = QLabel(label_text)
         
@@ -265,7 +292,47 @@ class AdetailerUnitWidget(QWidget):
         layout.addWidget(label, row, start_col)
         layout.addWidget(slider, row, start_col + 1)
         layout.addWidget(spin, row, start_col + 2)
+        
+        # Store reference for get_config
+        self.settings[key] = spin
 
     def get_config(self):
-        # ... (설정값 수집 로직 - 기존과 동일하게 모든 필드 포함) ...
-        return {} # Placeholder
+        """UI 요소에서 설정값을 읽어 딕셔너리로 반환"""
+        cfg = {
+            'enabled': self.chk_enable.isChecked(),
+            'model': self.combo_model.currentText(),
+            'use_sam': self.radio_sam.isChecked(),
+            'pos_prompt': self.txt_pos.toPlainText(),
+            'neg_prompt': self.txt_neg.toPlainText(),
+            'merge_mode': "Merge" if self.radio_merge_merge.isChecked() else ("Merge and Invert" if self.radio_merge_invert.isChecked() else "None"),
+            
+            # Advanced Checkboxes
+            'sep_steps': self.chk_sep_steps.isChecked(),
+            'sep_cfg': self.chk_sep_cfg.isChecked(),
+            'sep_ckpt': self.chk_sep_ckpt.isChecked(),
+            'sep_ckpt_name': self.combo_sep_ckpt.currentText(),
+            'sep_vae': self.chk_sep_vae.isChecked(),
+            'sep_vae_name': self.combo_sep_vae.currentText(),
+            'sep_sampler': self.chk_sep_sampler.isChecked(),
+            'sampler': f"{self.combo_sep_sampler.currentText()} {self.combo_sep_scheduler.currentText()}",
+            'sep_noise': self.chk_sep_noise.isChecked(),
+            'sep_clip': self.chk_sep_clip.isChecked(),
+            'restore_face': self.chk_restore_face.isChecked(),
+            
+            # ControlNet
+            'use_controlnet': self.combo_cn_model.currentText() != "None",
+            'cn_model': self.combo_cn_model.currentText(),
+            
+            # Inpaint Area
+            'inpaint_mask_only': self.chk_inpaint_mask_only.isChecked(),
+            'use_sep_res': self.chk_use_sep_res.isChecked(),
+        }
+
+        # Collect values from sliders/spinboxes
+        for key, widget in self.settings.items():
+            cfg[key] = widget.value()
+            
+        # Default seed (not in UI yet, assume random)
+        cfg['seed'] = -1
+        
+        return cfg

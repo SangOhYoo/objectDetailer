@@ -8,6 +8,7 @@ from core.detector import ObjectDetector
 from core.sam_wrapper import SamInference
 from core.config import config_instance as cfg
 from core.model_manager import ModelManager
+from core.face_restorer import FaceRestorer
 
 class ImageProcessor:
     def __init__(self, device, log_callback=None):
@@ -19,6 +20,7 @@ class ImageProcessor:
         model_dir = cfg.get_path('sam')
         self.detector = ObjectDetector(device=device, model_dir=model_dir)
         self.sam = None
+        self.face_restorer = FaceRestorer(device)
 
     def log(self, msg):
         if self.log_callback: self.log_callback(msg)
@@ -32,7 +34,23 @@ class ImageProcessor:
             self.log(f"  > Processing Unit {i+1} ({config['model']})...")
             
             # 모델 로딩 위임
-            self.model_manager.load_sd_model(use_controlnet=config['use_controlnet'])
+            # 1. 체크포인트/VAE 경로 결정
+            ckpt_path = None
+            if config.get('sep_ckpt') and config.get('sep_ckpt_name'):
+                ckpt_path = os.path.join(cfg.get_path('checkpoint'), config['sep_ckpt_name'])
+            
+            vae_path = None
+            if config.get('sep_vae') and config.get('sep_vae_name'):
+                vae_path = os.path.join(cfg.get_path('vae'), config['sep_vae_name'])
+
+            # 2. ControlNet 경로 결정
+            cn_path = None
+            if config.get('use_controlnet') and config.get('cn_model') != "None":
+                cn_path = os.path.join(cfg.get_path('controlnet'), config['cn_model'])
+
+            clip_skip = int(config.get('clip_skip', 1)) if config.get('sep_clip') else 1
+
+            self.model_manager.load_sd_model(ckpt_path, vae_path, cn_path, clip_skip)
             self.model_manager.manage_lora(config, action="load")
 
             try:
@@ -119,10 +137,18 @@ class ImageProcessor:
         # ControlNet
         control_args = {}
         if config['use_controlnet']:
-            canny = cv2.Canny(proc_img, 100, 200)
-            canny = np.stack([canny] * 3, axis=-1)
-            control_args["control_image"] = Image.fromarray(canny)
-            control_args["controlnet_conditioning_scale"] = config['cn_weight']
+            cn_model = config.get('cn_model', '').lower()
+            
+            if 'tile' in cn_model:
+                # Tile 모델은 원본 이미지를 그대로 사용 (혹은 블러)
+                control_args["control_image"] = pil_img
+            else:
+                # 기본값: Canny (OpenPose 등은 별도 전처리기 필요하나 여기선 Canny로 fallback)
+                canny = cv2.Canny(proc_img, 100, 200)
+                canny = np.stack([canny] * 3, axis=-1)
+                control_args["control_image"] = Image.fromarray(canny)
+            
+            control_args["controlnet_conditioning_scale"] = float(config['cn_weight'])
 
         # Apply Scheduler & Seed
         self.model_manager.apply_scheduler(config.get('sampler', 'Euler a'))
@@ -149,6 +175,11 @@ class ImageProcessor:
         res_np = cv2.resize(res_np, (w_orig, h_orig), interpolation=cv2.INTER_LANCZOS4)
         
         alpha = crop_mask.astype(float) / 255.0
+        
+        # Restore Face (얼굴 보정)
+        if config.get('restore_face'):
+            res_np = self.face_restorer.restore(res_np)
+
         alpha = cv2.merge([alpha, alpha, alpha])
         blended = res_np.astype(float) * alpha + crop_img.astype(float) * (1.0 - alpha)
         

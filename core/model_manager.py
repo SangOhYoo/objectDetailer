@@ -20,24 +20,41 @@ class ModelManager:
     def __init__(self, device):
         self.device = device
         self.pipe = None
+        self.current_config = {}
 
-    def load_sd_model(self, use_controlnet=False):
+    def load_sd_model(self, ckpt_path=None, vae_path=None, controlnet_path=None, clip_skip=1):
         """Stable Diffusion 파이프라인 로드"""
-        is_cn_loaded = isinstance(self.pipe, StableDiffusionControlNetInpaintPipeline)
-        if self.pipe is not None and is_cn_loaded == use_controlnet:
+        
+        # 기본 경로 설정 (인자가 없으면 config.yaml에서 로드)
+        if not ckpt_path:
+            ckpt_path = cfg.get_path('checkpoint', 'checkpoint_file')
+        if not vae_path:
+            vae_path = cfg.get_path('vae', 'vae_file')
+        
+        # ControlNet 경로 (인자가 없으면 config.yaml에서 로드)
+        use_controlnet = controlnet_path is not None
+        if not controlnet_path and cfg.get_path('controlnet', 'controlnet_tile'):
+             # 기본값으로 Tile 모델 사용 (필요시)
+             pass 
+
+        # 현재 로드된 설정과 비교
+        new_config = {
+            'ckpt': ckpt_path, 'vae': vae_path, 
+            'cn': controlnet_path, 'clip': clip_skip
+        }
+        
+        if self.pipe is not None and self.current_config == new_config:
             return
 
         with self._lock:
             if self.pipe: del self.pipe
             torch.cuda.empty_cache()
-
-            ckpt_path = cfg.get_path('checkpoint', 'checkpoint_file')
-            vae_path = cfg.get_path('vae', 'vae_file')
+            print(f"[ModelManager] Loading model: {os.path.basename(ckpt_path)} (ClipSkip: {clip_skip})")
             
             # ControlNet
             controlnet = None
-            if use_controlnet:
-                cn_path = cfg.get_path('controlnet', 'controlnet_tile')
+            if controlnet_path:
+                cn_path = controlnet_path
                 if cn_path and os.path.exists(cn_path):
                     controlnet = ControlNetModel.from_single_file(cn_path, torch_dtype=torch.float16)
 
@@ -61,12 +78,19 @@ class ModelManager:
 
             self.pipe = PipelineClass.from_single_file(ckpt_path, **load_args)
 
+            # Clip Skip 적용
+            if clip_skip > 1 and hasattr(self.pipe, 'text_encoder'):
+                # Diffusers 방식: 레이어 슬라이싱
+                self.pipe.text_encoder.text_model.encoder.layers = self.pipe.text_encoder.text_model.encoder.layers[:-clip_skip]
+
             # Move to Device
             self.pipe.to(self.device)
             self.pipe.unet.to(dtype=torch.float16)
             self.pipe.text_encoder.to(dtype=torch.float16)
             if controlnet: self.pipe.controlnet.to(dtype=torch.float16)
             if self.pipe.vae: self.pipe.vae.to(dtype=torch.float32)
+
+            self.current_config = new_config
 
     def manage_lora(self, config, action="load"):
         """LoRA 주입 및 해제"""

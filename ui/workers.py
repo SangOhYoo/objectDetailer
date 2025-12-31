@@ -202,24 +202,57 @@ class GpuWorker(QThread):
         return final_img
 
     def run_inpaint(self, image, mask, config, strength):
+        """
+        [Fix] Crop -> Upscale(512px) -> Inpaint -> Downscale -> Paste
+        """
+        # 1. Crop (Context Padding 포함)
         padding = config['padding']
         crop_img, (x1, y1, x2, y2) = MaskUtils.crop_image_by_mask(image, mask, context_padding=padding)
         crop_mask = mask[y1:y2, x1:x2]
         
         if crop_img.size == 0: return image
 
-        pil_img = Image.fromarray(cv2.cvtColor(crop_img, cv2.COLOR_BGR2RGB))
-        pil_mask = Image.fromarray(crop_mask)
+        # --- [NEW] Upscale Logic (High Quality Fix) ---
+        h_orig, w_orig = crop_img.shape[:2]
+        target_res = 512 # SD 1.5 Standard Resolution
+        
+        # 512보다 작으면 512로 키움 (비율 유지하지 않고 512x512로 맞추는 것이 인페인팅엔 유리할 수 있음, 여기선 비율 유지)
+        scale_factor = target_res / max(h_orig, w_orig)
+        
+        # 너무 작은 이미지만 키우고, 이미 크면 그대로 둠 (혹은 설정에 따라 다름)
+        if max(h_orig, w_orig) < target_res:
+            new_w = int(w_orig * scale_factor)
+            new_h = int(h_orig * scale_factor)
+            # 8배수 맞춤 (VAE 필수)
+            new_w -= new_w % 8
+            new_h -= new_h % 8
+            
+            proc_img = cv2.resize(crop_img, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+            proc_mask = cv2.resize(crop_mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+        else:
+            # 이미 크더라도 8배수는 맞춰야 함
+            new_w = w_orig - (w_orig % 8)
+            new_h = h_orig - (h_orig % 8)
+            proc_img = crop_img[:new_h, :new_w]
+            proc_mask = crop_mask[:new_h, :new_w]
+        # ----------------------------------------------
 
-        # ControlNet 전처리 (Canny)
+        # 2. Convert to PIL & RGB
+        pil_img = Image.fromarray(cv2.cvtColor(proc_img, cv2.COLOR_BGR2RGB))
+        pil_mask = Image.fromarray(proc_mask)
+
+        # 3. ControlNet Preprocessing (Canny)
         control_args = {}
         if config['use_controlnet']:
-            canny = cv2.Canny(crop_img, 100, 200)
+            # Canny는 리사이즈된 이미지 기준
+            canny = cv2.Canny(proc_img, 100, 200)
             canny = np.stack([canny] * 3, axis=-1)
             pil_control = Image.fromarray(canny)
+            
             control_args["control_image"] = pil_control
             control_args["controlnet_conditioning_scale"] = config['cn_weight']
 
+        # 4. Inference
         with torch.inference_mode():
             with torch.autocast(self.device_id.split(':')[0]):
                 output = self.pipe(
@@ -228,13 +261,19 @@ class GpuWorker(QThread):
                     image=pil_img,
                     mask_image=pil_mask,
                     strength=strength,
-                    width=pil_img.width - (pil_img.width % 8),
-                    height=pil_img.height - (pil_img.height % 8),
+                    width=new_w,  # 리사이즈된 크기 사용
+                    height=new_h,
                     **control_args
                 ).images[0]
 
+        # 5. Paste Back (Downscale)
         res_np = cv2.cvtColor(np.array(output), cv2.COLOR_RGB2BGR)
-        res_np = cv2.resize(res_np, (x2 - x1, y2 - y1))
+        
+        # --- [NEW] 원래 크기로 복원 ---
+        res_np = cv2.resize(res_np, (w_orig, h_orig), interpolation=cv2.INTER_LANCZOS4)
+        
+        # Alpha Blending for smoother edges (Optional but recommended)
+        # 여기선 단순 붙여넣기 유지 (Mask Blur가 되어있으므로 어느정도 자연스러움)
         image[y1:y2, x1:x2] = res_np
         
         return image

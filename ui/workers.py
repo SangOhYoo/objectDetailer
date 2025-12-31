@@ -20,8 +20,8 @@ from diffusers import (
 )
 
 # --- Global Resources ---
-_global_load_lock = threading.Lock() # 모델 로딩/스위칭 시 충돌 방지
-_job_queue = Queue() # 작업 대기열
+_global_load_lock = threading.Lock() # 모델 로딩/스위칭 시 충돌 방지 (Thread Safety)
+_job_queue = Queue() # 작업 대기열 (Producer-Consumer Pattern)
 
 class ProcessingController(QObject):
     """
@@ -100,7 +100,7 @@ class GpuWorker(QThread):
         self.detector = ObjectDetector(device=device_id)
         self.sam = None # Lazy Loading
 
-        # 기본 모델 경로 (실제 환경에 맞게 수정 필요)
+        # 기본 모델 경로 설정
         self.sd_model_path = "runwayml/stable-diffusion-inpainting"
         self.lora_dir = os.path.join("models", "loras")
         os.makedirs(self.lora_dir, exist_ok=True)
@@ -117,13 +117,13 @@ class GpuWorker(QThread):
 
             self.log_signal.emit(f"[Worker-{self.worker_id}] Processing: {os.path.basename(fpath)}")
             try:
-                # 1. 이미지 로드
-                # 한글 경로 호환성을 위해 numpy로 읽고 디코딩
-                img_array = np.fromfile(fpath, np.uint8)
-                img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                # 1. 이미지 로드 [FIX: 한글 경로 호환성]
+                # numpy로 바이너리를 읽은 후 디코딩해야 한글 경로에서 에러가 안 남
+                img_stream = np.fromfile(fpath, np.uint8)
+                img = cv2.imdecode(img_stream, cv2.IMREAD_COLOR)
                 
                 if img is None:
-                    self.log_signal.emit(f"[Worker-{self.worker_id}] Error: Failed to load image.")
+                    self.log_signal.emit(f"[Worker-{self.worker_id}] Error: Failed to load image (Check path).")
                     continue
                 
                 # 2. 이미지 처리 파이프라인 실행
@@ -175,6 +175,7 @@ class GpuWorker(QThread):
         [Core Logic] Detect -> Mask -> Inpaint
         """
         h, w = image.shape[:2]
+        img_area = h * w
         
         # A. 탐지 (Detector)
         # Returns list of dicts: {'box': [x1,y1,x2,y2], 'mask': np.array, ...}
@@ -183,7 +184,7 @@ class GpuWorker(QThread):
         if not detections:
             return image
 
-        # 면적순 정렬 (큰 객체부터 처리하는 것이 자연스러움)
+        # 면적순 정렬 (큰 객체부터 처리)
         detections.sort(key=lambda d: (d['box'][2]-d['box'][0]) * (d['box'][3]-d['box'][1]), reverse=True)
 
         # SAM 초기화 (필요한 경우)
@@ -199,6 +200,18 @@ class GpuWorker(QThread):
         # B. 객체별 처리 루프
         for det in detections:
             box = det['box']
+            x1, y1, x2, y2 = box
+            
+            # --- [FIX: Area Filtering] ---
+            # 너무 작거나 큰 객체는 무시 (ADetailer 핵심 기능)
+            box_area = (x2 - x1) * (y2 - y1)
+            ratio = box_area / img_area
+            
+            if ratio < config['min_area'] or ratio > config['max_area']:
+                # self.log_signal.emit(f"    Skipped object ratio {ratio:.3f} (Out of range)")
+                continue
+            # -----------------------------
+
             yolo_mask = det['mask'] # YOLO Seg 모델일 경우 존재
 
             # --- 1. 마스크 생성 ---
@@ -245,10 +258,9 @@ class GpuWorker(QThread):
         # 3. ControlNet Preprocessing (Canny)
         control_args = {}
         if config['use_controlnet']:
-            # Canny Edge 추출 (OpenCV uses BGR/Gray)
-            # Thresholds: 100, 200 (일반적인 값)
+            # Canny Edge 추출
             canny = cv2.Canny(crop_img, 100, 200)
-            # Diffusers ControlNet expects 3-channel RGB
+            # Diffusers ControlNet expects 3-channel RGB image
             canny = np.stack([canny] * 3, axis=-1)
             pil_control = Image.fromarray(canny)
             
@@ -327,7 +339,7 @@ class GpuWorker(QThread):
                 PipelineClass = StableDiffusionInpaintPipeline
 
             # 3. 모델 로드 (로컬 경로 우선, 없으면 HF 다운로드)
-            # 여기서는 편의상 from_pretrained 사용
+            # 여기서는 편의상 from_pretrained 사용 (실제론 로컬 경로 사용 권장)
             self.pipe = PipelineClass.from_pretrained(self.sd_model_path, **load_args)
 
             # 4. GPU 이동 및 FP16 변환
@@ -340,7 +352,7 @@ class GpuWorker(QThread):
 
     def manage_lora(self, config, action="load"):
         """
-        Diffusers 방식으로 LoRA 로드/언로드
+        [FIX: LoRA 안전 관리] 파일 부재 시 멈추지 않고 스킵
         """
         lora_name = config.get('lora_model', 'None')
         if lora_name == "None":
@@ -348,18 +360,17 @@ class GpuWorker(QThread):
 
         try:
             if action == "load":
-                # LoRA 파일 경로 (models/loras/...)
+                # LoRA 파일 경로 확인
                 lora_path = os.path.join(self.lora_dir, lora_name)
                 
-                # 파일이 존재할 경우 로드
-                if os.path.exists(lora_path):
-                    # adapter_name을 지정하여 나중에 특정해서 지울 수 있게 함
-                    self.pipe.load_lora_weights(lora_path, adapter_name="default")
-                    self.pipe.fuse_lora(lora_scale=config['lora_scale'])
-                    self.log_signal.emit(f"    [LoRA] Loaded: {lora_name} (Scale: {config['lora_scale']})")
-                else:
-                    # 파일이 없으면 HF Hub 이름으로 시도할 수도 있음 (선택사항)
-                    pass
+                if not os.path.exists(lora_path):
+                    self.log_signal.emit(f"    [Warning] LoRA not found: {lora_name}. Skipping.")
+                    return
+
+                # adapter_name을 지정하여 나중에 특정해서 지울 수 있게 함
+                self.pipe.load_lora_weights(lora_path, adapter_name="default")
+                self.pipe.fuse_lora(lora_scale=config['lora_scale'])
+                self.log_signal.emit(f"    [LoRA] Injected: {lora_name}")
 
             elif action == "unload":
                 # LoRA 제거 (메모리 및 다음 Pass 영향 방지)
@@ -367,4 +378,4 @@ class GpuWorker(QThread):
                 self.pipe.unload_lora_weights()
                 
         except Exception as e:
-            self.log_signal.emit(f"    [LoRA Error] {str(e)}")
+            self.log_signal.emit(f"    [LoRA Error] Failed to {action}: {str(e)}")

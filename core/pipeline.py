@@ -161,6 +161,8 @@ class ImageProcessor:
                 control_args["control_image"] = Image.fromarray(canny)
             
             control_args["controlnet_conditioning_scale"] = float(config['cn_weight'])
+            control_args["control_guidance_start"] = float(config.get('cn_start', 0.0))
+            control_args["control_guidance_end"] = float(config.get('cn_end', 1.0))
 
         # Apply Scheduler & Seed
         self.model_manager.apply_scheduler(config.get('sampler', 'Euler a'))

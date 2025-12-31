@@ -11,6 +11,7 @@ from PyQt6.QtGui import QPixmap, QImage, QAction, QActionGroup
 # 탭 위젯 & 컨트롤러 (기존 유지)
 from ui.main_window_tabs import AdetailerUnitWidget
 from ui.workers import ProcessingController
+from core.config import config_instance as cfg
 
 class ImageDropLabel(QLabel):
     """이미지 드래그 앤 드롭을 지원하는 라벨"""
@@ -44,7 +45,7 @@ class MainWindow(QMainWindow):
         
         self.init_ui()
         # 기본 테마: 다크 모드
-        self.apply_dark_theme()
+        self.apply_light_theme()
 
     def init_ui(self):
         # ============================================================
@@ -61,7 +62,7 @@ class MainWindow(QMainWindow):
         theme_group = QActionGroup(self)
         
         self.action_dark = QAction('다크 모드 (Dark)', self, checkable=True)
-        self.action_dark.setChecked(True)
+        self.action_dark.setChecked(False)
         self.action_dark.triggered.connect(self.apply_dark_theme)
         theme_group.addAction(self.action_dark)
         theme_menu.addAction(self.action_dark)
@@ -69,6 +70,7 @@ class MainWindow(QMainWindow):
         self.action_light = QAction('라이트 모드 (Light)', self, checkable=True)
         self.action_light.triggered.connect(self.apply_light_theme)
         theme_group.addAction(self.action_light)
+        self.action_light.setChecked(True)
         theme_menu.addAction(self.action_light)
         
         # --- Main Layout ---
@@ -90,9 +92,19 @@ class MainWindow(QMainWindow):
         global_layout = QHBoxLayout()
         
         self.combo_global_ckpt = QComboBox()
-        self.combo_global_ckpt.addItems(["henmix_real_v6b.safetensors", "sd_v1.5_pruned.ckpt"])
+        ckpt_dir = cfg.get_path('checkpoint')
+        if ckpt_dir and os.path.exists(ckpt_dir):
+            self.combo_global_ckpt.addItems([f for f in os.listdir(ckpt_dir) if f.endswith(('.ckpt', '.safetensors'))])
+        else:
+            self.combo_global_ckpt.addItem("No Checkpoints Found")
+
         self.combo_global_vae = QComboBox()
-        self.combo_global_vae.addItems(["Automatic", "vae-ft-mse-840000.pt"])
+        vae_dir = cfg.get_path('vae')
+        if vae_dir and os.path.exists(vae_dir):
+            self.combo_global_vae.addItem("Automatic")
+            self.combo_global_vae.addItems([f for f in os.listdir(vae_dir) if f.endswith(('.pt', '.ckpt', '.safetensors'))])
+        else:
+            self.combo_global_vae.addItem("Automatic")
         
         global_layout.addWidget(QLabel("체크포인트:"))
         global_layout.addWidget(self.combo_global_ckpt, 2)
@@ -105,7 +117,8 @@ class MainWindow(QMainWindow):
         # 2. Tabs
         self.tabs = QTabWidget()
         self.unit_widgets = []
-        for i in range(1, 10): 
+        max_passes = cfg.get('system', 'max_passes') or 15
+        for i in range(1, max_passes + 1): 
             tab = AdetailerUnitWidget(unit_name=f"패스 {i}")
             self.unit_widgets.append(tab)
             self.tabs.addTab(tab, f"패스 {i}")
@@ -188,6 +201,11 @@ class MainWindow(QMainWindow):
             QMenuBar::item:selected { background-color: #444; }
             QMenu { background-color: #333; border: 1px solid #555; }
             QMenu::item:selected { background-color: #0078d7; }
+
+            QRadioButton { spacing: 5px; color: #eeeeee; }
+            QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 2px solid #666; background-color: #333; }
+            QRadioButton::indicator:checked { background-color: #4dabf7; border-color: #4dabf7; }
+            QRadioButton::indicator:unchecked:hover { border-color: #888; }
         """
         self.setStyleSheet(dark_style)
         
@@ -225,6 +243,11 @@ class MainWindow(QMainWindow):
             QMenuBar::item:selected { background-color: #cccccc; }
             QMenu { background-color: #ffffff; border: 1px solid #cccccc; }
             QMenu::item:selected { background-color: #0078d7; color: white; }
+
+            QRadioButton { spacing: 5px; color: #333333; }
+            QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 2px solid #999; background-color: #fff; }
+            QRadioButton::indicator:checked { background-color: #0078d7; border-color: #0078d7; }
+            QRadioButton::indicator:unchecked:hover { border-color: #555; }
         """
         self.setStyleSheet(light_style)
         

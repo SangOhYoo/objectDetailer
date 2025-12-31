@@ -2,6 +2,7 @@ system:
   gpu_detect: "cuda:0"
   gpu_generate: "cuda:1"
   log_level: "DEBUG"
+  max_passes: 15
 
 paths:
   # [외부 경로 설정]

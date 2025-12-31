@@ -146,8 +146,8 @@ class AdetailerUnitWidget(QWidget):
         group_inpaint = QGroupBox("인페인팅 (Inpainting)")
         layout_inpaint = QGridLayout()
         
-        self.add_slider_row(layout_inpaint, 0, "마스크 블러:", 0, 64, 4, 1)
-        self.add_slider_row(layout_inpaint, 1, "디노이징 강도:", 0.0, 1.0, 0.4, 0.01)
+        self.add_slider_row(layout_inpaint, 0, "마스크 블러:", "blur", 0, 64, 4, 1)
+        self.add_slider_row(layout_inpaint, 1, "디노이징 강도:", "denoise", 0.0, 1.0, 0.4, 0.01)
         
         # Inpaint Area
         layout_area = QHBoxLayout()
@@ -157,13 +157,13 @@ class AdetailerUnitWidget(QWidget):
         layout_area.addWidget(self.chk_inpaint_mask_only)
         layout_area.addWidget(self.chk_use_sep_res)
         
-        self.add_slider_row(layout_inpaint, 2, "패딩(px):", 0, 256, 32, 1)
+        self.add_slider_row(layout_inpaint, 2, "패딩(px):", "padding", 0, 256, 32, 1)
         
         layout_inpaint.addLayout(layout_area, 3, 0, 1, 3)
         
         # Resolution Sliders
-        self.add_slider_row(layout_inpaint, 4, "너비:", 64, 2048, 512, 8)
-        self.add_slider_row(layout_inpaint, 5, "높이:", 64, 2048, 512, 8)
+        self.add_slider_row(layout_inpaint, 4, "너비:", "inpaint_width", 64, 2048, 512, 8)
+        self.add_slider_row(layout_inpaint, 5, "높이:", "inpaint_height", 64, 2048, 512, 8)
 
         group_inpaint.setLayout(layout_inpaint)
         self.layout.addWidget(group_inpaint)

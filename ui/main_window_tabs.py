@@ -20,7 +20,7 @@ class AdetailerUnitWidget(QWidget):
         scroll.setStyleSheet("QScrollArea { border: none; }")
         
         content_widget = QWidget()
-        self.layout = QVBoxLayout(content_widget)
+        self.layout = QGridLayout(content_widget)
         self.layout.setSpacing(15)
 
         # =================================================
@@ -61,7 +61,7 @@ class AdetailerUnitWidget(QWidget):
         layout_model.addWidget(QLabel("YOLO 모델:"))
         layout_model.addWidget(self.combo_model)
         group_model.setLayout(layout_model)
-        self.layout.addWidget(group_model)
+        self.layout.addWidget(group_model, 0, 0)
 
         # =================================================
         # 2. 인페인팅 프롬프트 (Prompts)
@@ -80,7 +80,7 @@ class AdetailerUnitWidget(QWidget):
         layout_prompt.addWidget(self.txt_pos)
         layout_prompt.addWidget(self.txt_neg)
         group_prompt.setLayout(layout_prompt)
-        self.layout.addWidget(group_prompt)
+        self.layout.addWidget(group_prompt, 1, 0)
 
         # =================================================
         # 3. 감지 설정 (Detection)
@@ -114,7 +114,7 @@ class AdetailerUnitWidget(QWidget):
         layout_detect.addWidget(spin_top_k, 4, 1)
         
         group_detect.setLayout(layout_detect)
-        self.layout.addWidget(group_detect)
+        self.layout.addWidget(group_detect, 2, 0)
 
         # =================================================
         # 4. 마스크 전처리 (Mask Preprocessing)
@@ -138,7 +138,7 @@ class AdetailerUnitWidget(QWidget):
         
         layout_mask.addLayout(layout_merge, 3, 0, 1, 3)
         group_mask.setLayout(layout_mask)
-        self.layout.addWidget(group_mask)
+        self.layout.addWidget(group_mask, 3, 0)
 
         # =================================================
         # 5. 인페인팅 (Inpainting)
@@ -166,7 +166,7 @@ class AdetailerUnitWidget(QWidget):
         self.add_slider_row(layout_inpaint, 5, "높이:", "inpaint_height", 64, 2048, 512, 8)
 
         group_inpaint.setLayout(layout_inpaint)
-        self.layout.addWidget(group_inpaint)
+        self.layout.addWidget(group_inpaint, 0, 1)
 
         # =================================================
         # 6. 고급 모델 설정 (Advanced)
@@ -225,7 +225,7 @@ class AdetailerUnitWidget(QWidget):
         layout_adv.addWidget(self.chk_restore_face, 7, 0, 1, 3)
 
         group_adv.setLayout(layout_adv)
-        self.layout.addWidget(group_adv)
+        self.layout.addWidget(group_adv, 1, 1)
 
         # =================================================
         # 7. 컨트롤넷 (ControlNet)
@@ -246,9 +246,11 @@ class AdetailerUnitWidget(QWidget):
         self.add_slider_row(layout_cn, 3, "가이던스 끝:", "cn_end", 0.0, 1.0, 1.0, 0.01)
         
         group_cn.setLayout(layout_cn)
-        self.layout.addWidget(group_cn)
+        self.layout.addWidget(group_cn, 4, 0)
 
-        self.layout.addStretch()
+        self.layout.setRowStretch(5, 1)
+        self.layout.setColumnStretch(0, 1)
+        self.layout.setColumnStretch(1, 1)
         
         scroll.setWidget(content_widget)
         

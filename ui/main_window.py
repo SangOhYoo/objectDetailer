@@ -1,5 +1,7 @@
 import sys
 import os
+import cv2
+import numpy as np
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QTabWidget, QLabel, QPushButton, QSplitter, 
                              QTextEdit, QComboBox, QGroupBox, QScrollArea,
@@ -11,28 +13,8 @@ from PyQt6.QtGui import QPixmap, QImage, QAction, QActionGroup
 # 탭 위젯 & 컨트롤러 (기존 유지)
 from ui.main_window_tabs import AdetailerUnitWidget
 from ui.workers import ProcessingController
+from ui.components import ImageCanvas, ComparisonViewer, FileQueueWidget
 from core.config import config_instance as cfg
-
-class ImageDropLabel(QLabel):
-    """이미지 드래그 앤 드롭을 지원하는 라벨"""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setText("이미지를 드래그하거나 불러오세요")
-        self.setAcceptDrops(True)
-        self.main_window = None
-
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.accept()
-        else:
-            event.ignore()
-
-    def dropEvent(self, event):
-        files = [u.toLocalFile() for u in event.mimeData().urls()]
-        image_files = [f for f in files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
-        if image_files and self.main_window:
-            self.main_window.handle_dropped_files(image_files)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -40,7 +22,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Standalone ADetailer - Dual GPU Edition")
         self.resize(1600, 1600)
         
-        self.file_paths = []
         self.controller = None
         
         self.init_ui()
@@ -124,8 +105,8 @@ class MainWindow(QMainWindow):
             self.tabs.addTab(tab, f"패스 {i}")
         
         left_layout.addWidget(self.tabs)
-        left_panel.setMinimumWidth(650)
-        left_panel.setMaximumWidth(750)
+        left_panel.setMinimumWidth(800)
+        left_panel.setMaximumWidth(950)
 
         # ============================================================
         # [Right Panel] Preview & Logs
@@ -136,20 +117,22 @@ class MainWindow(QMainWindow):
         right_layout.setSpacing(5)
 
         # 1. Mask Preview
-        self.mask_preview_label = QLabel("Mask Preview / Sub View")
-        self.mask_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.mask_preview_label.setMinimumHeight(400)
+        self.sub_view = ImageCanvas()
+        self.sub_view.setMinimumHeight(300)
 
-        # 2. Main Preview (Drop Area)
-        self.main_preview_label = ImageDropLabel()
-        self.main_preview_label.main_window = self
-        self.main_preview_label.setMinimumHeight(600)
-        self.main_preview_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # 2. Comparison Slider (Before / After)
+        self.compare_view = ComparisonViewer()
+        self.compare_view.setMinimumHeight(400)
+
+        # 3. File Queue (Thumbnails & Checkboxes)
+        self.file_queue = FileQueueWidget()
+        self.file_queue.setMinimumHeight(250)
+        self.file_queue.file_clicked.connect(self.on_file_clicked)
 
         # 3. Log
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setMinimumHeight(200)
+        self.log_text.setMinimumHeight(150)
 
         # 4. Buttons
         btn_layout = QHBoxLayout()
@@ -164,8 +147,9 @@ class MainWindow(QMainWindow):
         btn_layout.addWidget(self.btn_run)
         btn_layout.addWidget(self.btn_stop)
 
-        right_layout.addWidget(self.mask_preview_label, 1)
-        right_layout.addWidget(self.main_preview_label, 2)
+        right_layout.addWidget(self.sub_view, 1)
+        right_layout.addWidget(self.compare_view, 2)
+        right_layout.addWidget(self.file_queue, 1)
         right_layout.addWidget(self.log_text, 1)
         right_layout.addLayout(btn_layout)
 
@@ -210,8 +194,6 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(dark_style)
         
         # 프리뷰 영역 별도 스타일 (어두운 배경 유지)
-        self.mask_preview_label.setStyleSheet("background-color: #1e1e1e; border: 2px solid #d4b106; color: #aaa;")
-        self.main_preview_label.setStyleSheet("background-color: #1e1e1e; border: 2px dashed #2ea043; color: #aaa;")
         self.log_text.setStyleSheet("background-color: #1e1e1e; color: #00ff00; border: 2px solid #c0392b; font-family: Consolas;")
         
         # 버튼 스타일 재설정 (중지 버튼 빨간색 유지)
@@ -252,8 +234,6 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(light_style)
         
         # 프리뷰 영역 별도 스타일 (밝은 배경)
-        self.mask_preview_label.setStyleSheet("background-color: #ffffff; border: 2px solid #d4b106; color: #555;")
-        self.main_preview_label.setStyleSheet("background-color: #ffffff; border: 2px dashed #2ea043; color: #555;")
         self.log_text.setStyleSheet("background-color: #ffffff; color: #000000; border: 2px solid #c0392b; font-family: Consolas;")
         
         # 버튼 스타일 재설정
@@ -267,23 +247,54 @@ class MainWindow(QMainWindow):
     def load_image_dialog(self):
         fnames, _ = QFileDialog.getOpenFileNames(self, "Select Images", "", "Images (*.png *.jpg *.jpeg *.webp)")
         if fnames:
-            self.handle_dropped_files(fnames)
+            for f in fnames:
+                self.file_queue._add_item(f)
+            self.log(f"Added {len(fnames)} files to queue.")
 
-    def handle_dropped_files(self, file_paths):
-        self.file_paths.extend(file_paths)
-        self.log(f"Added {len(file_paths)} files to queue.")
-        # 첫 번째 이미지 미리보기
-        if file_paths:
-            pixmap = QPixmap(file_paths[0])
-            self.main_preview_label.setPixmap(pixmap.scaled(
-                self.main_preview_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-            self.main_preview_label.setText("")
+    def on_file_clicked(self, file_path):
+        """대기열에서 파일 클릭 시 프리뷰 로드"""
+        try:
+            # 한글 경로 지원을 위해 numpy로 로드 후 디코딩
+            stream = open(file_path.encode("utf-8"), "rb")
+            bytes = bytearray(stream.read())
+            numpyarray = np.asarray(bytes, dtype=np.uint8)
+            img = cv2.imdecode(numpyarray, cv2.IMREAD_COLOR)
+            
+            if img is not None:
+                self.compare_view.set_images(img, img) # Before/After 동일하게 초기화
+                self.sub_view.set_image(img)
+        except Exception as e:
+            self.log(f"Error loading preview: {e}")
 
     def start_processing(self):
-        # 기존 로직 연결 (Controller 등)
+        files = self.file_queue.get_all_files()
+        if not files:
+            self.log("No files to process.")
+            return
+
+        # Collect configs from all enabled tabs
+        configs = []
+        for tab in self.unit_widgets:
+            cfg = tab.get_config()
+            if cfg['enabled']:
+                configs.append(cfg)
+
+        if not configs:
+            self.log("No enabled tabs (passes). Please enable at least one pass.")
+            return
+
         self.log("Starting batch processing...")
-        # self.controller = ProcessingController(...) 
-        # self.controller.start_processing()
+        self.controller = ProcessingController(files, configs)
+        self.controller.log_signal.connect(self.log)
+        self.controller.result_signal.connect(self.handle_result)
+        self.controller.start_processing()
+
+    def handle_result(self, path, result_img):
+        """처리 결과 수신 시 뷰어 업데이트"""
+        self.log(f"Finished: {os.path.basename(path)}")
+        self.sub_view.set_image(result_img) # 실시간 처리 이미지 표현
+        self.compare_view.pixmap_after = self.compare_view._np2pix(result_img) # After 이미지 업데이트
+        self.compare_view.update()
 
     def stop_processing(self):
         self.log("Stopping processing...")

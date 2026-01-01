@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import torch
 import traceback
+import warnings
 from queue import Queue
 from PyQt6.QtCore import QThread, pyqtSignal, QObject
 
@@ -12,6 +13,10 @@ if not hasattr(torchvision.transforms, "functional_tensor"):
     import torchvision.transforms.functional as F
     import sys
     sys.modules["torchvision.transforms.functional_tensor"] = F
+
+# [Fix] Suppress annoying FutureWarnings from libraries
+warnings.filterwarnings("ignore", category=FutureWarning, module="insightface")
+warnings.filterwarnings("ignore", category=FutureWarning, module="torchvision")
 
 from core.pipeline import ImageProcessor  # 로직 위임
 from core.config import config_instance as cfg

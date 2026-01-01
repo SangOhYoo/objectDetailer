@@ -149,13 +149,10 @@ class ModelManager:
             elif hasattr(self.pipe, 'enable_vae_tiling'):
                 self.pipe.enable_vae_tiling()
 
-            # 4. CPU Offload (VRAM 절약의 핵심)
-            # .to(device) 대신 사용하여 필요할 때만 GPU로 올림
-            try:
-                self.pipe.enable_model_cpu_offload(device=self.device)
-            except Exception as e:
-                print(f"[ModelManager] CPU Offload failed ({e}). Fallback to standard .to()")
-                self.pipe.to(self.device)
+            # 4. GPU로 이동 (Standard)
+            # [Fix] enable_model_cpu_offload는 LoRA/YOLO와 Meta Tensor 충돌을 일으키므로
+            # 안정성을 위해 표준 .to(device)를 사용합니다.
+            self.pipe.to(self.device)
 
             self.current_config = new_config
 

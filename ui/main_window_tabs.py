@@ -119,6 +119,35 @@ class AdetailerUnitWidget(QWidget):
         self.spin_top_k.setValue(self.saved_config.get('max_det', 20))
         layout_detect.addWidget(self.spin_top_k, 4, 1)
 
+        # [New] 정렬 기준 UI 추가
+        layout_detect.addWidget(QLabel("정렬 기준:"), 5, 0)
+        
+        self.bg_sort = QButtonGroup(self)
+        self.radio_sort_lr = QRadioButton("위치(좌→우)")
+        self.radio_sort_center = QRadioButton("위치(중앙→바깥)")
+        self.radio_sort_area = QRadioButton("영역(대→소)")
+        self.radio_sort_conf = QRadioButton("신뢰도")
+        
+        self.bg_sort.addButton(self.radio_sort_lr)
+        self.bg_sort.addButton(self.radio_sort_center)
+        self.bg_sort.addButton(self.radio_sort_area)
+        self.bg_sort.addButton(self.radio_sort_conf)
+        
+        saved_sort = self.saved_config.get('sort_method', '신뢰도')
+        if saved_sort == '위치(좌에서 우)': self.radio_sort_lr.setChecked(True)
+        elif saved_sort == '위치 (중앙에서 바깥)': self.radio_sort_center.setChecked(True)
+        elif saved_sort == '영역 (대형에서 소형)': self.radio_sort_area.setChecked(True)
+        else: self.radio_sort_conf.setChecked(True)
+        
+        layout_sort_radios = QGridLayout()
+        layout_sort_radios.setContentsMargins(0, 0, 0, 0)
+        layout_sort_radios.addWidget(self.radio_sort_lr, 0, 0)
+        layout_sort_radios.addWidget(self.radio_sort_center, 0, 1)
+        layout_sort_radios.addWidget(self.radio_sort_area, 1, 0)
+        layout_sort_radios.addWidget(self.radio_sort_conf, 1, 1)
+        
+        layout_detect.addLayout(layout_sort_radios, 5, 1, 1, 2)
+
         group_detect.setLayout(layout_detect)
         self.layout.addWidget(group_detect, 1, 0)
 
@@ -385,6 +414,10 @@ class AdetailerUnitWidget(QWidget):
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.addWidget(scroll)
+        
+        # [New] 모델 변경 감지 및 UI 동적 업데이트 연결
+        self.combo_sep_ckpt.currentTextChanged.connect(self.on_local_ckpt_changed)
+        self.chk_sep_ckpt.toggled.connect(self.on_sep_ckpt_toggled)
 
     def add_slider_row(self, layout, row, label_text, key, min_val, max_val, default_val, step, start_col=0):
         label = QLabel(label_text)
@@ -419,6 +452,36 @@ class AdetailerUnitWidget(QWidget):
         
         self.settings[key] = spin
 
+    def on_local_ckpt_changed(self, text):
+        """개별 체크포인트 변경 시 UI 업데이트"""
+        if self.chk_sep_ckpt.isChecked() and text != "Use Global":
+            self.apply_model_presets(text)
+
+    def on_sep_ckpt_toggled(self, checked):
+        """개별 체크포인트 사용 여부 토글 시 UI 업데이트"""
+        if checked:
+            self.on_local_ckpt_changed(self.combo_sep_ckpt.currentText())
+        # 체크 해제 시 글로벌 설정은 MainWindow에서 다시 전파되거나 다음 글로벌 변경 시 적용됨
+
+    def on_global_model_changed(self, text):
+        """글로벌 모델 변경 시 (개별 설정이 꺼져있거나 Use Global일 때) UI 업데이트"""
+        if not self.chk_sep_ckpt.isChecked() or self.combo_sep_ckpt.currentText() == "Use Global":
+            self.apply_model_presets(text)
+
+    def apply_model_presets(self, model_name):
+        """모델 이름에 따라 해상도 등 프리셋 자동 적용 (SDXL vs SD1.5)"""
+        name = model_name.lower()
+        is_sdxl = "xl" in name or "pony" in name
+        
+        if is_sdxl:
+            # SDXL Defaults: 1024x1024
+            if self.spin_inpaint_w.value() == 512 or self.spin_inpaint_w.value() == 0: self.spin_inpaint_w.setValue(1024)
+            if self.spin_inpaint_h.value() == 512 or self.spin_inpaint_h.value() == 0: self.spin_inpaint_h.setValue(1024)
+        else:
+            # SD1.5 Defaults: 512x512
+            if self.spin_inpaint_w.value() == 1024: self.spin_inpaint_w.setValue(512)
+            if self.spin_inpaint_h.value() == 1024: self.spin_inpaint_h.setValue(512)
+
     def get_config(self):
         """Configs.py Key 완전 일치 및 누락 기능 복구 완료"""
         cfg = {
@@ -437,6 +500,10 @@ class AdetailerUnitWidget(QWidget):
             'pos_prompt': self.txt_pos.toPlainText(),
             'neg_prompt': self.txt_neg.toPlainText(),
             'max_det': self.spin_top_k.value(),
+            
+            'sort_method': '위치(좌에서 우)' if self.radio_sort_lr.isChecked() else \
+                           '위치 (중앙에서 바깥)' if self.radio_sort_center.isChecked() else \
+                           '영역 (대형에서 소형)' if self.radio_sort_area.isChecked() else '신뢰도',
             
             'use_controlnet': self.combo_cn_model.currentText() != "None",
             'control_model': self.combo_cn_model.currentText(),

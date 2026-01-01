@@ -1,6 +1,6 @@
 system:
   gpu_detect: cuda:0
-  gpu_generate: cuda:1
+  gpu_generate: cuda:0
   log_level: DEBUG
   max_passes: 15
 paths:
@@ -21,6 +21,7 @@ defaults:
   padding: 1.5
   denoise: 0.4
   controlnet_weight: 0.5
+  sort_method: 신뢰도
 ui_settings:
   패스 1:
     enabled: true
@@ -41,6 +42,7 @@ ui_settings:
     neg_prompt: (worst quality, low quality, normal quality, lowres, bokeh, blur:2.0),
       (polydactyly, polydactylism:2.0)
     max_det: 1
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: None
@@ -66,13 +68,13 @@ ui_settings:
     min_face_ratio: 0.01
     max_face_ratio: 1.0
     denoising_strength: 0.4
-    crop_padding: 32
+    crop_padding: 64
     sam_points_per_side: 32
     sam_pred_iou_thresh: 0.88
     sam_stability_score_thresh: 0.95
-    mask_dilation: 4
+    mask_dilation: 8
     mask_erosion: 0
-    mask_blur: 12
+    mask_blur: 24
     x_offset: 0
     y_offset: 0
     control_weight: 1.0
@@ -90,20 +92,18 @@ ui_settings:
     ignore_edge_touching: false
     anatomy_check: false
     auto_rotate: false
-    color_fix: None
-    use_hires_fix: false
-    pos_prompt: score 9, score 8 up, score 7 up, score 6 up, zPDXL3, 8k uhd, (pale
-      skin:0.9), (large breasts:1.1), (detailed nipples, normal nipples, cute nipples,
-      puffy nipples),
-    neg_prompt: 'score 6, score 5, score 4, pony, muscular, makeup, censored, furry,
-      (child, kid, chibi:1.1), big breasts, big chest, cgi, '
+    color_fix: Wavelet
+    use_hires_fix: true
+    pos_prompt: 'score 9, score 8 up, score 7 up, score 6 up, source_anime, (large breasts:1.2), (detailed nipples), (pale skin), (glossy skin)'
+    neg_prompt: 'score 6, score 5, score 4, source_pony, source_furry, (muscular), (censored), (barbie doll anatomy)'
     max_det: 1
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
-    sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    sep_noise: true
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: true
@@ -123,13 +123,13 @@ ui_settings:
     min_face_ratio: 0.01
     max_face_ratio: 1.0
     denoising_strength: 0.4
-    crop_padding: 32
+    crop_padding: 64
     sam_points_per_side: 32
     sam_pred_iou_thresh: 0.88
     sam_stability_score_thresh: 0.95
-    mask_dilation: 4
+    mask_dilation: 8
     mask_erosion: 0
-    mask_blur: 12
+    mask_blur: 24
     x_offset: 0
     y_offset: 0
     control_weight: 1.0

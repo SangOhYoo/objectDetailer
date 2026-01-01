@@ -100,6 +100,8 @@ class MainWindow(QMainWindow):
         global_layout.addWidget(QLabel("VAE:"))
         global_layout.addWidget(self.combo_global_vae, 1)
         
+        self.combo_global_ckpt.currentTextChanged.connect(self.on_global_ckpt_changed)
+        
         self.global_group.setLayout(global_layout)
         left_layout.addWidget(self.global_group)
 
@@ -177,6 +179,10 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(False)
         self.statusBar().addPermanentWidget(self.progress_bar)
         self.statusBar().showMessage("[System] Initialized. Ready.")
+
+        # Trigger initial model check
+        if self.combo_global_ckpt.count() > 0:
+            self.on_global_ckpt_changed(self.combo_global_ckpt.currentText())
 
     # --- Save Logic ---
     def save_all_configs(self):
@@ -279,10 +285,17 @@ class MainWindow(QMainWindow):
             self.log("No files to process.")
             return
 
+        # [Fix] 글로벌 모델 설정 수집
+        global_ckpt = self.combo_global_ckpt.currentText()
+        global_vae = self.combo_global_vae.currentText()
+
         configs = []
         for tab in self.unit_widgets:
             cfg_data = tab.get_config()
             if cfg_data['enabled']:
+                # 각 탭 설정에 글로벌 설정 주입
+                cfg_data['global_ckpt_name'] = global_ckpt
+                cfg_data['global_vae_name'] = global_vae
                 configs.append(cfg_data)
 
         if not configs:
@@ -326,6 +339,11 @@ class MainWindow(QMainWindow):
         self.log("Stopping processing...")
         if self.controller:
             self.controller.stop()
+
+    def on_global_ckpt_changed(self, text):
+        """글로벌 모델 변경 시 각 탭에 알림 (UI 동적 업데이트)"""
+        for tab in self.unit_widgets:
+            tab.on_global_model_changed(text)
 
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication

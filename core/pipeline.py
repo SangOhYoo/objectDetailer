@@ -1,6 +1,7 @@
 import os
 import re
 import cv2
+import gc
 import numpy as np
 import torch
 from PIL import Image
@@ -13,6 +14,7 @@ from core.model_manager import ModelManager
 from core.face_restorer import FaceRestorer
 from core.visualizer import draw_detections
 from core.geometry import align_and_crop, restore_and_paste, is_anatomically_correct
+from core.box_sorter import sort_boxes
 
 class ImageProcessor:
     def __init__(self, device, log_callback=None, preview_callback=None):
@@ -40,13 +42,22 @@ class ImageProcessor:
             
             # 모델 로딩 위임
             # 1. 체크포인트/VAE 경로 결정
-            ckpt_path = None
+            # [Fix] Global vs Local 모델 결정 로직 강화
+            ckpt_name = None
             if config.get('sep_ckpt') and config.get('sep_ckpt_name') and config['sep_ckpt_name'] != "Use Global":
-                ckpt_path = os.path.join(cfg.get_path('checkpoint'), config['sep_ckpt_name'])
+                ckpt_name = config['sep_ckpt_name']
+            else:
+                ckpt_name = config.get('global_ckpt_name')
+
+            ckpt_path = os.path.join(cfg.get_path('checkpoint'), ckpt_name) if ckpt_name else None
             
-            vae_path = None
+            vae_name = None
             if config.get('sep_vae') and config.get('sep_vae_name') and config['sep_vae_name'] != "Use Global":
-                vae_path = os.path.join(cfg.get_path('vae'), config['sep_vae_name'])
+                vae_name = config['sep_vae_name']
+            else:
+                vae_name = config.get('global_vae_name')
+            
+            vae_path = os.path.join(cfg.get_path('vae'), vae_name) if vae_name and vae_name != "Automatic" else None
 
             # 2. ControlNet 경로 결정
             cn_path = None
@@ -55,7 +66,18 @@ class ImageProcessor:
 
             clip_skip = int(config.get('clip_skip', 1)) if config.get('sep_clip') else 1
 
+            # [Fix] 모델 로드 전 메모리 정리
+            gc.collect()
+            torch.cuda.empty_cache()
+
             self.model_manager.load_sd_model(ckpt_path, vae_path, cn_path, clip_skip)
+            
+            # [Fix] VAE OOM 방지: Tiling 및 Slicing 활성화
+            # SDXL 등 고해상도 모델에서 VAE 인코딩/디코딩 시 메모리 부족을 방지하는 핵심 설정
+            if hasattr(self.model_manager.pipe, "enable_vae_tiling"):
+                self.model_manager.pipe.enable_vae_tiling()
+            if hasattr(self.model_manager.pipe, "enable_vae_slicing"):
+                self.model_manager.pipe.enable_vae_slicing()
             
             # [New] Prompt 기반 LoRA 파싱 및 로드
             raw_prompt = config.get('pos_prompt', '')
@@ -87,8 +109,23 @@ class ImageProcessor:
         if self.preview_callback:
             vis_img = draw_detections(image, detections)
             self.preview_callback(vis_img)
+            
+        # [New] Split Prompts by [SEP] (ADetailer Syntax)
+        sep_pattern = r"\s*\[SEP\]\s*"
+        pos_prompts = re.split(sep_pattern, config.get('pos_prompt', ''))
+        neg_prompts = re.split(sep_pattern, config.get('neg_prompt', ''))
 
-        detections.sort(key=lambda d: (d['box'][2]-d['box'][0]) * (d['box'][3]-d['box'][1]), reverse=True)
+        # [Modified] Sort Detections based on Config
+        boxes = [d['box'] for d in detections]
+        scores = [d['conf'] for d in detections]
+        sort_method = config.get('sort_method', '신뢰도')
+        _, _, sorted_indices = sort_boxes(boxes, scores, sort_method, w, h)
+        detections = [detections[i] for i in sorted_indices]
+
+        # [New] Apply Max Detections Limit (정렬 후 상위 N개만 선택)
+        max_det = config.get('max_det', 20)
+        if len(detections) > max_det:
+            detections = detections[:max_det]
 
         if config['use_sam']:
             if self.sam is None:
@@ -98,7 +135,7 @@ class ImageProcessor:
 
         final_img = image.copy()
 
-        for det in detections:
+        for i, det in enumerate(detections):
             box = det['box']
             x1, y1, x2, y2 = box
             
@@ -113,6 +150,26 @@ class ImageProcessor:
                 if detected_gender and detected_gender != target_gender:
                     self.log(f"  Skipping detection: Gender mismatch ({detected_gender} != {target_gender})")
                     continue
+
+            # [New] Select Prompt for this object (ADetailer Logic)
+            # If there are more detected objects than separate prompts, the last prompt will be used.
+            cur_pos = pos_prompts[i] if i < len(pos_prompts) else pos_prompts[-1]
+            cur_neg = neg_prompts[i] if i < len(neg_prompts) else neg_prompts[-1]
+
+            # [New] Check [SKIP]
+            if re.match(r"^\s*\[SKIP\]\s*$", cur_pos, re.IGNORECASE):
+                self.log(f"  Skipping detection {i+1}: [SKIP] token found.")
+                continue
+
+            # [New] Replace [PROMPT] token
+            # Standalone 환경에서는 원본 생성 프롬프트가 없으므로 빈 문자열로 대체하여 토큰 오염 방지
+            cur_pos = cur_pos.replace("[PROMPT]", "")
+            cur_neg = cur_neg.replace("[PROMPT]", "")
+            
+            # Create config for this specific detection
+            det_config = config.copy()
+            det_config['pos_prompt'] = cur_pos
+            det_config['neg_prompt'] = cur_neg
 
             # Masking
             if config['use_sam'] and self.sam:
@@ -142,7 +199,7 @@ class ImageProcessor:
                     continue
             
             # Inpaint
-            final_img = self._run_inpaint(final_img, mask, config, denoise, box, kps)
+            final_img = self._run_inpaint(final_img, mask, det_config, denoise, box, kps)
 
             # [New] 얼굴 하나 처리될 때마다 프리뷰 갱신 (실시간 피드백)
             if self.preview_callback:
@@ -158,7 +215,11 @@ class ImageProcessor:
         w_box, h_box = box[2] - box[0], box[3] - box[1]
         padding_ratio = (padding_px * 2) / max(w_box, h_box) if max(w_box, h_box) > 0 else 0.25
         
-        target_res = 512 # Default processing resolution
+        target_res = 512
+        # [Fix] SDXL Model Detection for Default Resolution
+        if hasattr(self.model_manager.pipe, "tokenizer_2"):
+            target_res = 1024
+            
         if config.get('inpaint_width', 0) > 0: target_res = config['inpaint_width']
         
         do_rotate = config.get('auto_rotate', False) and kps is not None
@@ -167,6 +228,9 @@ class ImageProcessor:
         proc_img, M = align_and_crop(image, box, kps, target_size=target_res, padding=padding_ratio, force_rotate=do_rotate)
         proc_mask, _ = align_and_crop(mask, box, kps, target_size=target_res, padding=padding_ratio, force_rotate=do_rotate, borderMode=cv2.BORDER_CONSTANT)
         
+        # [Fix] 합성 시 바운딩 박스 흔적을 없애기 위해 Soft Mask 보존
+        paste_mask = proc_mask.copy()
+
         # Binarize mask after warping
         _, proc_mask = cv2.threshold(proc_mask, 127, 255, cv2.THRESH_BINARY)
         
@@ -244,6 +308,9 @@ class ImageProcessor:
             infer_args["negative_prompt"] = config['neg_prompt']
 
         # Inference
+        # [Fix] 인퍼런스 직전 메모리 정리
+        torch.cuda.empty_cache()
+        
         with torch.inference_mode():
             with torch.autocast(self.device.split(':')[0]):
                 output = self.model_manager.pipe(**infer_args).images[0]
@@ -256,7 +323,7 @@ class ImageProcessor:
             res_np = self.face_restorer.restore(res_np)
 
         # [Fix] Use Geometry Module for Inverse Transform & Blending
-        final_img = restore_and_paste(image, res_np, M, mask_blur=config['mask_blur'])
+        final_img = restore_and_paste(image, res_np, M, mask_blur=config['mask_blur'], paste_mask=paste_mask)
         
         return final_img
 

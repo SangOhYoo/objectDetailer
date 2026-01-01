@@ -1,14 +1,21 @@
+numpy<2
 PyQt6>=6.4.0
-torch>=2.1.0 --index-url https://download.pytorch.org/whl/cu121
-torchvision>=0.16.0 --index-url https://download.pytorch.org/whl/cu121
+torch>=2.1.0
+torchvision>=0.16.0
 diffusers>=0.25.0
 transformers>=4.36.0
 accelerate>=0.25.0
 opencv-python>=4.9.0
 ultralytics>=8.1.0
-mediapipe>=0.10.9
+mediapipe==0.10.14
+protobuf<5
 segment-anything
 pyyaml
 huggingface-hub
 scipy
 gfpgan
+insightface>=0.7.3
+onnxruntime-gpu
+peft>=0.7.0
+controlnet_aux>=0.0.7
+msvc-runtime

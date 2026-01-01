@@ -6,8 +6,24 @@ from ultralytics import YOLO
 
 try:
     import mediapipe as mp
+    # [Fix] Ensure 'solutions' is available to prevent AttributeError
+    if not hasattr(mp, 'solutions'):
+        try:
+            import mediapipe.solutions as solutions
+            mp.solutions = solutions
+        except ImportError:
+            try:
+                import mediapipe.python.solutions as solutions
+                mp.solutions = solutions
+            except ImportError as e_fallback:
+                raise e_fallback
     HAS_MEDIAPIPE = True
-except ImportError:
+except Exception as e:
+    if "Descriptors cannot" in str(e):
+        print("[Detector] Critical: Protobuf version conflict detected. Please run: pip install \"protobuf<5\"")
+    if "No module named" in str(e):
+        print("[Detector] Hint: MediaPipe might be broken. Try: pip install --force-reinstall mediapipe")
+    print(f"[Detector] Warning: MediaPipe initialization failed: {e}. Landmarks disabled.")
     HAS_MEDIAPIPE = False
 
 try:
@@ -15,6 +31,7 @@ try:
     from insightface.app import FaceAnalysis
     HAS_INSIGHTFACE = True
 except ImportError:
+    print("[Detector] Warning: InsightFace not installed. Gender filter disabled.")
     HAS_INSIGHTFACE = False
 
 class ObjectDetector:

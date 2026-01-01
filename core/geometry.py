@@ -92,7 +92,7 @@ def align_and_crop(image, bbox, kps=None, target_size=512, padding=0.25, force_r
     
     return aligned, M
 
-def restore_and_paste(base_image, processed_crop, M, mask_blur=12):
+def restore_and_paste(base_image, processed_crop, M, mask_blur=12, paste_mask=None):
     """
     처리된 얼굴(정자세)을 역변환(Inverse)하여 원래 각도로 돌리고 합성합니다.
     """
@@ -107,15 +107,24 @@ def restore_and_paste(base_image, processed_crop, M, mask_blur=12):
     restored_patch = cv2.warpAffine(processed_crop, M_inv, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
     
     # 3. 마스크 생성 (사각형 White Mask -> 역회전)
-    mask = np.full((crop_h, crop_w), 255, dtype=np.uint8)
-    # 가장자리 블러링을 위해 안쪽으로 살짝 줄임
-    border = mask_blur
-    cv2.rectangle(mask, (0, 0), (crop_w, crop_h), 0, border * 2) 
+    if paste_mask is not None:
+        # [Fix] 바운딩 박스 흔적 제거를 위해 실제 마스크 사용
+        if paste_mask.shape[:2] != (crop_h, crop_w):
+             paste_mask = cv2.resize(paste_mask, (crop_w, crop_h))
+        mask = paste_mask
+    else:
+        mask = np.full((crop_h, crop_w), 255, dtype=np.uint8)
+        # 가장자리 블러링을 위해 안쪽으로 살짝 줄임
+        border = mask_blur
+        cv2.rectangle(mask, (0, 0), (crop_w, crop_h), 0, border * 2) 
+
     # 역회전된 마스크 (원본 이미지 위에서의 영역)
     warped_mask = cv2.warpAffine(mask, M_inv, (w, h), flags=cv2.INTER_LINEAR)
     
     # 4. 마스크 블러링 (Soft Edge)
-    warped_mask = cv2.GaussianBlur(warped_mask, (mask_blur*2+1, mask_blur*2+1), 0)
+    # paste_mask가 없을 때만 강제 블러 적용 (paste_mask는 이미 블러 처리됨)
+    if paste_mask is None and mask_blur > 0:
+        warped_mask = cv2.GaussianBlur(warped_mask, (mask_blur*2+1, mask_blur*2+1), 0)
     
     # 5. 알파 블렌딩
     mask_alpha = warped_mask.astype(float) / 255.0

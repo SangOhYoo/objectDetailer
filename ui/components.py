@@ -30,8 +30,7 @@ class ImageCanvas(QLabel):
     def set_image(self, image):
         if image is None: return
 
-        # [CRITICAL FIX] 흑백/채널 불일치로 인한 크래시 방지
-        # 메모리 연속성 확보
+        # 메모리 연속성 확보 (크래시 방지)
         image = np.ascontiguousarray(image, dtype=np.uint8)
         
         # 차원 확인 (H, W)인 경우 -> (H, W, 3)으로 변환
@@ -41,27 +40,18 @@ class ImageCanvas(QLabel):
         h, w = image.shape[:2]
         c = image.shape[2] if len(image.shape) > 2 else 1
 
-        # OpenCV BGR/BGRA -> Qt RGB 변환
-        if c == 1:
-             image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
-        elif c == 3:
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        elif c == 4:
-            image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
+        if c == 1: image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+        elif c == 3: image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        elif c == 4: image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
             
-        self.image = image # 변환된 이미지 저장
+        self.image = image
         
-        # QImage 생성 (bytes_per_line 명시 필수)
         h, w, c = image.shape
         bytes_per_line = c * w
         q_img = QImage(
-            image.data, 
-            w, h, 
-            bytes_per_line, 
-            QImage.Format.Format_RGB888
+            image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888
         )
         
-        # 데이터 복사로 참조 유지 (QImage가 소멸되어도 안전하게)
         self.original_pixmap = QPixmap.fromImage(q_img.copy())
         self.update_view()
 
@@ -92,7 +82,7 @@ class ImageCanvas(QLabel):
 
 
 # =========================================================
-# 2. [녹색 박스] 오버레이 비교 슬라이더 (Before/After Swipe)
+# 2. [수정됨] ComparisonViewer (Before/After 스플리터)
 # =========================================================
 class ComparisonViewer(QWidget):
     """
@@ -110,20 +100,17 @@ class ComparisonViewer(QWidget):
         self.setMinimumSize(300, 300)
 
     def set_images(self, src_img, dst_img):
-        """이미지 설정 및 화면 갱신"""
         self.pixmap_before = self._np2pix(src_img)
         self.pixmap_after = self._np2pix(dst_img)
         self.update() 
 
     def _np2pix(self, img):
         if img is None: return None
-        
-        # [CRITICAL FIX] 안전한 변환 로직 적용
         img = np.ascontiguousarray(img, dtype=np.uint8)
         
-        if len(img.shape) == 2: # 흑백 이미지
+        if len(img.shape) == 2:
             img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
-            
+        
         h, w = img.shape[:2]
         c = img.shape[2] if len(img.shape) > 2 else 1
         
@@ -131,10 +118,8 @@ class ComparisonViewer(QWidget):
         elif c == 3: img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         elif c == 4: img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
             
-        # RGB로 통일됨 (c=3)
         h, w, c = img.shape
         bytes_per_line = c * w
-        
         qimg = QImage(img.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
         return QPixmap.fromImage(qimg.copy())
 
@@ -145,26 +130,24 @@ class ComparisonViewer(QWidget):
         w = self.width()
         h = self.height()
         
-        # 1. 이미지가 없을 때
         if not self.pixmap_before or not self.pixmap_after:
             painter.setPen(Qt.GlobalColor.white)
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "이미지 없음 (Before / After)")
             return
 
-        # 2. 이미지 스케일링
+        # 이미지 스케일링
         scaled_before = self.pixmap_before.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         scaled_after = self.pixmap_after.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         
-        # 중앙 정렬 좌표 계산
         img_w = scaled_before.width()
         img_h = scaled_before.height()
         x_offset = (w - img_w) // 2
         y_offset = (h - img_h) // 2
         
-        # 3. [After 이미지] 전체 그리기 (배경)
+        # After 이미지 (배경)
         painter.drawPixmap(x_offset, y_offset, scaled_after)
 
-        # 4. [Before 이미지] 클리핑하여 그리기
+        # Before 이미지 (클리핑)
         split_x = int(w * self.slider_pos)
         
         painter.save()
@@ -172,7 +155,7 @@ class ComparisonViewer(QWidget):
         painter.drawPixmap(x_offset, y_offset, scaled_before)
         painter.restore()
 
-        # 5. 슬라이더 라인 및 핸들
+        # 슬라이더 라인
         pen = QPen(QColor(255, 255, 255))
         pen.setWidth(2)
         painter.setPen(pen)
@@ -182,11 +165,13 @@ class ComparisonViewer(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(QPoint(split_x, h // 2), 6, 6)
 
-        # 6. 텍스트 라벨
+        # 6. 텍스트 라벨 [수정 완료]
+        # QFont() 생성 및 setPointSize() 제거 -> painter.font() 사용
         painter.setPen(QColor(255, 255, 255))
-        font = QFont()
-        font.setBold(True)
-        font.setPointSize(10)
+        
+        font = painter.font() # 현재 위젯에 적용된 안전한 폰트 가져오기
+        font.setBold(True)    # 굵게만 설정
+        # font.setPointSize(10) # <--- [에러 원인] 이 줄을 삭제했습니다.
         painter.setFont(font)
         
         def draw_text_with_shadow(x, y, text):
@@ -283,7 +268,6 @@ class FileQueueWidget(QWidget):
                 self._add_item(f)
 
     def _add_item(self, path):
-        # 중복 체크
         for i in range(self.list_widget.count()):
             if self.list_widget.item(i).data(Qt.ItemDataRole.UserRole) == path:
                 return

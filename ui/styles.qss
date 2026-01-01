@@ -1,21 +1,38 @@
-# src/core/detector.py
-import os
-from ultralytics import YOLO
-
-class Detector:
-    def __init__(self, model_dir): self.model_dir = model_dir; self.model = None
-
-    def detect(self, image, config):
-        model_name = config.get('model', 'face_yolov8n.pt')
-        if not self.model: self.model = YOLO(os.path.join(self.model_dir, model_name))
-        
-        results = self.model(image, conf=config.get('conf_thresh', 0.35), verbose=False)
-        detections = []
-        if not results: return []
-        
-        for box in results[0].boxes:
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            mask = results[0].masks.data[0].cpu().numpy() if results[0].masks else None
-            # (마스크 처리 로직 생략 - 필요시 추가 가능)
-            detections.append((x1, y1, x2, y2, mask if mask is not None else image[y1:y2, x1:x2])) # Placeholder mask
-        return detections
+/* [복구됨] ui/styles.qss */
+/* 오염된 Python 코드를 제거하고, 다크 테마 QSS로 복구했습니다. */
+QMainWindow, QWidget { 
+    background-color: #2b2b2b; 
+    color: #eeeeee; 
+    font-size: 13px; 
+}
+QSplitter::handle { 
+    background-color: #444; 
+    width: 4px; 
+}
+QGroupBox { 
+    border: 1px solid #555; 
+    margin-top: 15px; 
+    border-radius: 4px; 
+}
+QGroupBox::title { 
+    subcontrol-origin: margin; 
+    left: 10px; 
+    padding: 0 5px; 
+    color: #4dabf7; 
+    font-weight: bold; 
+}
+QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox { 
+    background-color: #333; 
+    border: 1px solid #555; 
+    padding: 4px; 
+    border-radius: 3px; 
+    color: #eee;
+}
+QPushButton { 
+    background-color: #0078d7; 
+    color: white; 
+    border: none; 
+    padding: 8px; 
+    border-radius: 4px; 
+    font-weight: bold; 
+}

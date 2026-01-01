@@ -5,6 +5,7 @@ import gc
 import numpy as np
 import torch
 from PIL import Image
+import traceback
 
 from core.mask_utils import MaskUtils
 from core.detector import ObjectDetector
@@ -12,9 +13,10 @@ from core.sam_wrapper import SamInference
 from core.config import config_instance as cfg
 from core.model_manager import ModelManager
 from core.face_restorer import FaceRestorer
-from core.visualizer import draw_detections
+from core.visualizer import draw_detections, draw_mask_on_image
 from core.geometry import align_and_crop, restore_and_paste, is_anatomically_correct
 from core.box_sorter import sort_boxes
+from core.color_fix import apply_color_fix
 
 class ImageProcessor:
     def __init__(self, device, log_callback=None, preview_callback=None):
@@ -38,63 +40,78 @@ class ImageProcessor:
         for i, config in enumerate(configs):
             if not config['enabled']: continue
             
-            self.log(f"  > Processing Unit {i+1} ({config['detector_model']})...")
+            # [Fix] 로그에 실제 패스 이름 표시 (Unit 1, 2... 대신 패스 2, 3... 표시)
+            unit_name = config.get('unit_name', f"Unit {i+1}")
+            self.log(f"  > Processing {unit_name} ({config['detector_model']})...")
             
-            # 모델 로딩 위임
-            # 1. 체크포인트/VAE 경로 결정
-            # [Fix] Global vs Local 모델 결정 로직 강화
-            ckpt_name = None
-            if config.get('sep_ckpt') and config.get('sep_ckpt_name') and config['sep_ckpt_name'] != "Use Global":
-                ckpt_name = config['sep_ckpt_name']
-            else:
-                ckpt_name = config.get('global_ckpt_name')
-
-            ckpt_path = os.path.join(cfg.get_path('checkpoint'), ckpt_name) if ckpt_name else None
-            
-            vae_name = None
-            if config.get('sep_vae') and config.get('sep_vae_name') and config['sep_vae_name'] != "Use Global":
-                vae_name = config['sep_vae_name']
-            else:
-                vae_name = config.get('global_vae_name')
-            
-            vae_path = os.path.join(cfg.get_path('vae'), vae_name) if vae_name and vae_name != "Automatic" else None
-
-            # 2. ControlNet 경로 결정
-            cn_path = None
-            if config.get('use_controlnet') and config.get('control_model') != "None":
-                cn_path = os.path.join(cfg.get_path('controlnet'), config['control_model'])
-
-            clip_skip = int(config.get('clip_skip', 1)) if config.get('sep_clip') else 1
-
-            # [Fix] 모델 로드 전 메모리 정리
-            gc.collect()
-            torch.cuda.empty_cache()
-
-            self.model_manager.load_sd_model(ckpt_path, vae_path, cn_path, clip_skip)
-            
-            # [Fix] VAE OOM 방지: Tiling 및 Slicing 활성화
-            # SDXL 등 고해상도 모델에서 VAE 인코딩/디코딩 시 메모리 부족을 방지하는 핵심 설정
-            if hasattr(self.model_manager.pipe, "enable_vae_tiling"):
-                self.model_manager.pipe.enable_vae_tiling()
-            if hasattr(self.model_manager.pipe, "enable_vae_slicing"):
-                self.model_manager.pipe.enable_vae_slicing()
-            
-            # [New] Prompt 기반 LoRA 파싱 및 로드
-            raw_prompt = config.get('pos_prompt', '')
-            clean_prompt, lora_list = self._parse_and_extract_loras(raw_prompt)
-            
-            self.model_manager.manage_lora(lora_list, action="load")
-            
-            # 이번 패스에서만 사용할 Clean Prompt 적용 (Config 복사본 사용)
-            pass_config = config.copy()
-            pass_config['pos_prompt'] = clean_prompt
+            # [Debug] 현재 패스 설정값 로그 출력
+            if cfg.get('system', 'log_level') == 'DEBUG':
+                self.log(f"    [Debug] Configuration for {unit_name}:")
+                for k, v in config.items():
+                    if k in ['pos_prompt', 'neg_prompt']:
+                        v_str = str(v).replace('\n', ' ')
+                        if len(v_str) > 60: v_str = v_str[:57] + "..."
+                        self.log(f"      - {k}: {v_str}")
+                    else:
+                        self.log(f"      - {k}: {v}")
 
             try:
-                result_img = self._process_pass(result_img, pass_config)
-                if self.preview_callback:
-                    self.preview_callback(result_img)
+                # 모델 로딩 위임
+                # 1. 체크포인트/VAE 경로 결정
+                # [Fix] Global vs Local 모델 결정 로직 강화
+                ckpt_name = None
+                if config.get('sep_ckpt') and config.get('sep_ckpt_name') and config['sep_ckpt_name'] != "Use Global":
+                    ckpt_name = config['sep_ckpt_name']
+                else:
+                    ckpt_name = config.get('global_ckpt_name')
+
+                ckpt_path = os.path.join(cfg.get_path('checkpoint'), ckpt_name) if ckpt_name else None
+                
+                vae_name = None
+                if config.get('sep_vae') and config.get('sep_vae_name') and config['sep_vae_name'] != "Use Global":
+                    vae_name = config['sep_vae_name']
+                else:
+                    vae_name = config.get('global_vae_name')
+                
+                vae_path = os.path.join(cfg.get_path('vae'), vae_name) if vae_name and vae_name != "Automatic" else None
+
+                # 2. ControlNet 경로 결정
+                cn_path = None
+                if config.get('use_controlnet') and config.get('control_model') != "None":
+                    cn_path = os.path.join(cfg.get_path('controlnet'), config['control_model'])
+
+                clip_skip = int(config.get('clip_skip', 1)) if config.get('sep_clip') else 1
+
+                # [Fix] 모델 로드 전 메모리 정리
+                gc.collect()
+                torch.cuda.empty_cache()
+
+                self.model_manager.load_sd_model(ckpt_path, vae_path, cn_path, clip_skip)
+                
+                # [Fix] VAE OOM 방지: Tiling 및 Slicing 활성화
+                # SDXL 등 고해상도 모델에서 VAE 인코딩/디코딩 시 메모리 부족을 방지하는 핵심 설정
+                if hasattr(self.model_manager.pipe.vae, "enable_tiling"):
+                    self.model_manager.pipe.vae.enable_tiling()
+                elif hasattr(self.model_manager.pipe, "enable_vae_tiling"): # Fallback for older diffusers
+                    self.model_manager.pipe.enable_vae_tiling()
+
+                if hasattr(self.model_manager.pipe.vae, "enable_slicing"):
+                    self.model_manager.pipe.vae.enable_slicing()
+                elif hasattr(self.model_manager.pipe, "enable_vae_slicing"): # Fallback for older diffusers
+                    self.model_manager.pipe.enable_vae_slicing()
+                
+                try:
+                    result_img = self._process_pass(result_img, config)
+                    if self.preview_callback:
+                        self.preview_callback(result_img)
+                except Exception as e:
+                    self.log(f"  [Error] Failed to process {unit_name}: {e}")
+                    traceback.print_exc()
+            except Exception as e:
+                self.log(f"  [Error] Setup failed for {unit_name}: {e}")
+                traceback.print_exc()
             finally:
-                self.model_manager.manage_lora(lora_list, action="unload")
+                self.model_manager.manage_lora([], action="unload")
                 
         return result_img
 
@@ -103,13 +120,10 @@ class ImageProcessor:
         img_area = h * w
         
         detections = self.detector.detect(image, config['detector_model'], config['conf_thresh'])
-        if not detections: return image
+        if not detections:
+            self.log(f"    [Info] No objects detected (Threshold: {config['conf_thresh']}).")
+            return image
 
-        # [New] 탐지된 영역(박스+마스크+점수) 시각화 및 프리뷰 전송
-        if self.preview_callback:
-            vis_img = draw_detections(image, detections)
-            self.preview_callback(vis_img)
-            
         # [New] Split Prompts by [SEP] (ADetailer Syntax)
         sep_pattern = r"\s*\[SEP\]\s*"
         pos_prompts = re.split(sep_pattern, config.get('pos_prompt', ''))
@@ -127,6 +141,17 @@ class ImageProcessor:
         if len(detections) > max_det:
             detections = detections[:max_det]
 
+        # [New] Pre-calculate LoRAs for visualization (프리뷰용 LoRA 정보 미리 계산)
+        for i, det in enumerate(detections):
+            cur_pos = pos_prompts[i] if i < len(pos_prompts) else pos_prompts[-1]
+            _, lora_list = self._parse_and_extract_loras(cur_pos)
+            det['lora_names'] = [name for name, _ in lora_list]
+
+        # [Fix] 정렬 및 필터링이 끝난 후 프리뷰를 생성해야 실제 처리 순서와 일치함
+        if self.preview_callback:
+            vis_img = draw_detections(image, detections)
+            self.preview_callback(vis_img)
+
         if config['use_sam']:
             if self.sam is None:
                 sam_file = cfg.get_path('sam', 'sam_file')
@@ -140,7 +165,12 @@ class ImageProcessor:
             x1, y1, x2, y2 = box
             
             # Area Filtering
-            if (box[2]-x1)*(y2-y1)/img_area < config['min_face_ratio'] or (box[2]-x1)*(y2-y1)/img_area > config['max_face_ratio']:
+            face_ratio = ((box[2]-x1)*(y2-y1)) / img_area
+            if face_ratio < config['min_face_ratio']:
+                self.log(f"    Skipping detection #{i+1}: Too small ({face_ratio:.4f} < {config['min_face_ratio']})")
+                continue
+            if face_ratio > config['max_face_ratio']:
+                self.log(f"    Skipping detection #{i+1}: Too large ({face_ratio:.4f} > {config['max_face_ratio']})")
                 continue
 
             # [New] Gender Filter (성별 필터)
@@ -156,6 +186,17 @@ class ImageProcessor:
             cur_pos = pos_prompts[i] if i < len(pos_prompts) else pos_prompts[-1]
             cur_neg = neg_prompts[i] if i < len(neg_prompts) else neg_prompts[-1]
 
+            # [Debug] 프롬프트 할당 확인 로그 (검증용)
+            if cfg.get('system', 'log_level') == 'DEBUG':
+                p_idx = i if i < len(pos_prompts) else len(pos_prompts) - 1
+                self.log(f"    [Debug] Object #{i+1}: Applied Prompt Segment #{p_idx + 1}")
+
+            # [New] Extract LoRAs for THIS detection (Dynamic Loading)
+            # 각 객체마다 다른 LoRA를 적용하기 위해 여기서 파싱 및 로드 수행
+            clean_pos, lora_list = self._parse_and_extract_loras(cur_pos)
+            # ModelManager가 스마트 캐싱을 수행하므로, 이전과 같은 LoRA면 재로딩하지 않음
+            self.model_manager.manage_lora(lora_list, action="load")
+
             # [New] Check [SKIP]
             if re.match(r"^\s*\[SKIP\]\s*$", cur_pos, re.IGNORECASE):
                 self.log(f"  Skipping detection {i+1}: [SKIP] token found.")
@@ -163,12 +204,12 @@ class ImageProcessor:
 
             # [New] Replace [PROMPT] token
             # Standalone 환경에서는 원본 생성 프롬프트가 없으므로 빈 문자열로 대체하여 토큰 오염 방지
-            cur_pos = cur_pos.replace("[PROMPT]", "")
+            clean_pos = clean_pos.replace("[PROMPT]", "")
             cur_neg = cur_neg.replace("[PROMPT]", "")
             
             # Create config for this specific detection
             det_config = config.copy()
-            det_config['pos_prompt'] = cur_pos
+            det_config['pos_prompt'] = clean_pos
             det_config['neg_prompt'] = cur_neg
 
             # Masking
@@ -184,6 +225,11 @@ class ImageProcessor:
             mask = MaskUtils.refine_mask(mask, dilation=config['mask_dilation'], blur=config['mask_blur'])
             # if config.get('merge_mode') == "Merge and Invert":
             #     mask = cv2.bitwise_not(mask)
+            
+            # [New] 실시간 마스크 확인: 인페인팅 직전에 현재 적용될 마스크를 프리뷰에 표시
+            if self.preview_callback:
+                mask_vis = draw_mask_on_image(final_img, mask, color=(0, 255, 0))
+                self.preview_callback(mask_vis)
             
             # Dynamic Denoise
             denoise = self._calc_dynamic_denoise(box, (h, w), config['denoising_strength'])
@@ -317,6 +363,11 @@ class ImageProcessor:
 
         # Paste Back (Alpha Blend)
         res_np = cv2.cvtColor(np.array(output), cv2.COLOR_RGB2BGR)
+        
+        # [New] Color Fix (색감 보정)
+        color_fix_method = config.get('color_fix', 'None')
+        if color_fix_method != 'None':
+            res_np = apply_color_fix(res_np, proc_img, color_fix_method)
         
         # Restore Face (얼굴 보정)
         if config.get('restore_face', False):

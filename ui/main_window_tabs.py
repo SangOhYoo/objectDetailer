@@ -443,7 +443,13 @@ class AdetailerUnitWidget(QWidget):
         spin.setValue(loaded_val)
         slider.setValue(int(loaded_val * scale))
         
-        slider.valueChanged.connect(lambda v: spin.setValue(v / scale))
+        # [Fix] 슬라이더 -> 스핀박스 (타입 에러 방지)
+        if is_float:
+            slider.valueChanged.connect(lambda v: spin.setValue(v / scale))
+        else:
+            slider.valueChanged.connect(lambda v: spin.setValue(int(v / scale)))
+            
+        # 스핀박스 -> 슬라이더 (값 변경 시 즉시 반영)
         spin.valueChanged.connect(lambda v: slider.setValue(int(v * scale)))
         
         layout.addWidget(label, row, start_col)

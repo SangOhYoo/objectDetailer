@@ -25,6 +25,7 @@ from core.metadata import save_image_with_metadata
 class ProcessingController(QObject):
     log_signal = pyqtSignal(str)
     progress_signal = pyqtSignal(int, int)
+    file_started_signal = pyqtSignal(str)
     preview_signal = pyqtSignal(np.ndarray)
     result_signal = pyqtSignal(str, object)
     finished_signal = pyqtSignal()
@@ -57,6 +58,7 @@ class ProcessingController(QObject):
             worker = GpuWorker(dev_id, self.configs, worker_id=i, queue=self.queue)
             worker.log_signal.connect(self.log_signal.emit)
             worker.preview_signal.connect(self.preview_signal.emit)
+            worker.file_started_signal.connect(self.file_started_signal.emit)
             worker.result_signal.connect(self.handle_result)
             worker.finished_signal.connect(self.check_finished)
             self.workers.append(worker)
@@ -89,6 +91,7 @@ class ProcessingController(QObject):
 class GpuWorker(QThread):
     log_signal = pyqtSignal(str)
     preview_signal = pyqtSignal(np.ndarray)
+    file_started_signal = pyqtSignal(str)
     result_signal = pyqtSignal(str, object)
     finished_signal = pyqtSignal()
 
@@ -143,6 +146,7 @@ class GpuWorker(QThread):
                 fpath = self.queue.get_nowait()
             except: break
 
+            self.file_started_signal.emit(os.path.basename(fpath))
             self.relay_log(f"Processing: {os.path.basename(fpath)}")
             try:
                 img_stream = np.fromfile(fpath, np.uint8)

@@ -9,6 +9,9 @@ if __name__ == "__main__":
     warnings.filterwarnings("ignore", category=UserWarning, message=".*The parameter 'pretrained' is deprecated.*")
     warnings.filterwarnings("ignore", category=UserWarning, message=".*Arguments other than a weight enum.*")
     warnings.filterwarnings("ignore", category=FutureWarning, message=".*weights_only=False.*")
+    warnings.filterwarnings("ignore", category=UserWarning, message=".*unexpected keys not found in the model.*")
+    warnings.filterwarnings("ignore", category=UserWarning, message=".*Token indices sequence length is longer.*")
+    warnings.filterwarnings("ignore", category=FutureWarning, module="diffusers.pipelines.pipeline_utils")
 
     app = QApplication(sys.argv)
 

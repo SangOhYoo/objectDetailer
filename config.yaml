@@ -24,37 +24,38 @@ defaults:
   sort_method: 신뢰도
 ui_settings:
   패스 1:
-    enabled: true
-    detector_model: Anzhc Face seg 1024 v2 y8n.pt
+    enabled: false
+    detector_model: person_yolov8n-seg.pt
     use_sam: false
     auto_prompt_injection: true
-    gender_filter: Female
+    gender_filter: All
     ignore_edge_touching: false
-    anatomy_check: true
-    auto_rotate: true
+    anatomy_check: false
+    auto_rotate: false
     color_fix: Wavelet
     use_hires_fix: true
-    pos_prompt: '(masterpiece), (best quality), (high resolution), (photorealistic),
-      [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>], pale skin, (glossy skin:1.1),
-      looking at another, (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed,
-      aroused, moaning, ecstacy:1.6), (shocked:1.2), (closed eyes:1.2), (open mouth:1.4),
-      (female orgasm:1.4), '
-    neg_prompt: (worst quality, low quality, normal quality, lowres, bokeh, blur:2.0),
-      (polydactyly, polydactylism:2.0)
+    pos_prompt: Stable_Yogis_PDXL_Positives, score 9, score 8 up, score 7 up, score
+      6 up, real, realism, source photo, source realism, photo, film grain, depth
+      of field, Breathtaking, highly detailed, sharp focus, completely nude
+    neg_prompt: Stable_Yogis_PDXL_Negatives-neg, score 6, score 5, score 4, deformed,
+      deformed face, low quality, bad quality, worst quality, (drawn, furry, illustration,
+      cartoon, anime, comic:1.5), 3d, cgi, extra fingers, (source anime, source cartoon,
+      source furry, source western, source comic, source pony), deformed teeth, small
+      breasts, small chest, camera, Beards, glasses, futanari, collage
     max_det: 1
     sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: None
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
-    sep_ckpt: true
-    sep_ckpt_name: henmix_real_v6b-fp16-no-ema.safetensors
-    sep_vae: true
-    sep_vae_name: vae-ft-mse-840000-ema-pruned.ckpt.vae.pt
+    sep_ckpt: false
+    sep_ckpt_name: Use Global
+    sep_vae: false
+    sep_vae_name: Use Global
     sep_sampler: true
     sampler_name: DPM++ 2M Karras
     sep_steps: true
@@ -64,7 +65,7 @@ ui_settings:
     sep_clip: true
     clip_skip: 2
     restore_face: true
-    conf_thresh: 0.35
+    conf_thresh: 0.7
     min_face_ratio: 0.01
     max_face_ratio: 1.0
     denoising_strength: 0.4
@@ -85,31 +86,110 @@ ui_settings:
     seed: -1
   패스 2:
     enabled: true
-    detector_model: Anzhc Breasts Seg v1 1024s.pt
+    detector_model: Anzhcs ManFace v02 1024 y8n.pt
     use_sam: false
     auto_prompt_injection: true
-    gender_filter: Female
+    gender_filter: Male
     ignore_edge_touching: false
-    anatomy_check: false
-    auto_rotate: false
-    color_fix: Wavelet
+    anatomy_check: true
+    auto_rotate: true
+    color_fix: None
     use_hires_fix: true
-    pos_prompt: 'score 9, score 8 up, score 7 up, score 6 up, source_anime, (large breasts:1.2), (detailed nipples), (pale skin), (glossy skin)'
-    neg_prompt: 'score 6, score 5, score 4, source_pony, source_furry, (muscular), (censored), (barbie doll anatomy)'
+    pos_prompt: '(masterpiece), (best quality), (high resolution), (photorealistic),
+      [<lora:sangoh-10:0.7>:(21 years old asian boy:0.2)], pale skin, (glossy skin:1.1),
+      looking at another, (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed,
+      aroused, moaning, ecstacy:1.6), (shocked:1.2), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:eunwoo:0.8>eunwoo,
+      (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7), (full-face
+      blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2), (closed eyes:1.2),
+      (open mouth:1.4), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:CasinoChoi:0.8>pale
+      skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:eunwoo:0.8>eunwoo,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:jenov2:0.8>jenov2,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:jin:0.8>pale
+      skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:kboys:0.8>kpop,
+      boy, young man, pale skin, (glossy skin:1.1), looking at another, (seductive
+      smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Kpop
+      Boy:0.8>pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8),
+      (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Lora-Custom-ModelLiXian:0.8>1man,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:sangoh-10:0.8>pale
+      skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:sehun:0.8>sehun,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:soobin-000004:0.8>soobin,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:soobin:0.8>soobin,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Ss9:0.8>pale
+      skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:wonwoo-08:0.8>wonwoo,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:wonwoo-10:0.8>wonwoo,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP]'
+    neg_prompt: (worst quality, low quality, normal quality, lowres, bokeh, blur:2.0),
+      (polydactyly, polydactylism:2.0)
     max_det: 1
     sort_method: 신뢰도
     use_controlnet: false
     control_model: None
-    control_module: inpaint_global_harmonious
+    control_module: None
     sep_noise: true
-    inpaint_width: 1024
-    inpaint_height: 1024
+    inpaint_width: 512
+    inpaint_height: 512
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: true
-    sep_ckpt_name: pinkiepiePonyMix_v36Fp16.safetensors
+    sep_ckpt_name: henmix_real_v6b-fp16-no-ema.safetensors
     sep_vae: true
-    sep_vae_name: sdxl_vae.safetensors
+    sep_vae_name: vae-ft-mse-840000-ema-pruned.ckpt.vae.pt
     sep_sampler: true
     sampler_name: DPM++ 2M Karras
     sep_steps: true
@@ -118,12 +198,12 @@ ui_settings:
     cfg_scale: 7.0
     sep_clip: true
     clip_skip: 2
-    restore_face: false
+    restore_face: true
     conf_thresh: 0.35
-    min_face_ratio: 0.01
+    min_face_ratio: 0.0
     max_face_ratio: 1.0
     denoising_strength: 0.4
-    crop_padding: 64
+    crop_padding: 32
     sam_points_per_side: 32
     sam_pred_iou_thresh: 0.88
     sam_stability_score_thresh: 0.95
@@ -139,40 +219,992 @@ ui_settings:
     noise_multiplier: 1.0
     seed: -1
   패스 3:
-    enabled: false
-    detector_model: adetailerAfterDetailer_v10.pt
+    enabled: true
+    detector_model: Anzhcs WomanFace v05 1024 y8n.pt
     use_sam: false
     auto_prompt_injection: true
-    gender_filter: All
+    gender_filter: Female
     ignore_edge_touching: false
     anatomy_check: true
     auto_rotate: true
-    color_fix: None
-    use_hires_fix: false
-    pos_prompt: ''
-    neg_prompt: ''
-    max_det: 20
+    color_fix: Adain
+    use_hires_fix: true
+    pos_prompt: '(masterpiece), (best quality), (high resolution), (photorealistic),
+      [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>], pale skin, (glossy skin:1.1),
+      looking at another, (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed,
+      aroused, moaning, ecstacy:1.6), (shocked:1.2), (closed eyes:1.2), (open mouth:1.4),
+      (female orgasm:1.4), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:sunyoung-09:0.7>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:SungRyoungKim-09:0.7>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:RyuRiLee-08:0.7>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:SooAe-08:0.7>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:YoungNamJang-09:0.7>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:SoYeounKim-10:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), (closed eyes:1.2),
+      (open mouth:1.4), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:leeboyoung-09:0.7>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:JooMiPark:1.1>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:miyeoun-09:0.7>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:sunghee-10:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:makina69_kimkyuseon_v1.0:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Kang
+      Sora_20240509081436:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Sayuri
+      Yoshinaga_20240220044822:0.8>Sayuri Yoshinaga, pale skin, (glossy skin:1.1),
+      looking at another, (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed,
+      aroused, moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing
+      pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:shoko_aida-10:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Kim
+      hee sun:0.8>, pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8),
+      (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:KimSarang:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:makina69_joeywong_v1.0:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:makina69_hyori_v1.0:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tissue_LeeHyori_v1.5:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:makina69_bibi_v1.1:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:makina69_hanjimin_v1.0:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:llfSon
+      Ye Jin:0.8>, pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8),
+      (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tissue_Son_Ye_Jin_v2.0:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Son
+      Yejin_20230816074730:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tissue_Chae_Soobin_v1.5:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:CSBin:0.8>csbin,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:fumika
+      baba:0.8>fumika, pale skin, (glossy skin:1.1), looking at another, (seductive
+      smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:fumika_baba_16:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Han
+      HyoJoo_2023091510.825:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tissue_HanHyoJoo_v2.5_1:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:HYJoo:0.8>HYJoo,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:shoko
+      aida:0.8>shoko, pale skin, (glossy skin:1.1), looking at another, (seductive
+      smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ShokoAida:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:JooMeePark-09:0.7>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:parkjumi:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ParkJooMi:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:PJMface:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Akita
+      Shiori_20230915092803:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Anya01V30:0.6>A
+      woman named Anya01, Anya01, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Anya01V40:0.6>A
+      woman named Anya01, Anya01, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:arin_v1:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:atmchunyu_10:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:baesuzy-v2:0.8>baesuzy,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:BaeSuzy_v1:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:bambilavie_v1:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:code88WillBeDeleted_lora88:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:dahyun1:0.8>dytwdahyun,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Disown8290_Dara_v1.0:0.8>d4ra,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:egsihyeon-v1:0.8>egsihyeon,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:eunha-sd1.5-25step-epoch525-v1:0.8>eunha,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:fss_V1:0.8>fangbb/zhengshi,
+      fangbb/zhengshi nice, pale skin, (glossy skin:1.1), looking at another, (seductive
+      smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Fukumoto
+      Riko_20230724194414:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:GirlfriendMix2:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:GO
+      MIN SI_20230725084355:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:goyoonjung-v1-1.5:0.8>goyounjung,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:goyounjung-free-v2:0.8>goyounjung,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Gsu:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:gunjikyoko_lora:0.8>gunjikyoko,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:hannilorashy:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:hannilorashyv1_5:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:hannilorashyv1_6:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:haruka-arai:0.8>haruka,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:HoriMiona:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:hyeriV1:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:hyun__v2:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ieirileo_lora:0.8>1girl,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:IgawaHaruka_20230919160348:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Im
+      Nayeon:0.8>nayeon, im nayeon, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ImYoona_v1:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:inouehonoka_lora:0.8>inouehonoka,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Irene_20230730223043:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:irene_V70:0.8>irene1,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:iu_V35:0.8>iu1,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ivewonyoung-v3:0.8>ivewonyoung,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ivewonyoung-v6:0.8>ivewonyoung,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ivewonyoung-v7-hb:0.8>ivewonyoung,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ivewonyoung-v9z4000:0.8>ivewonyoung,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Jennie
+      Blackpink:0.8>jennie, jennie blackpink, pale skin, (glossy skin:1.1), looking
+      at another, (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed,
+      aroused, moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing
+      pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Jeon
+      YeoBeen_20240603110707:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:jessilorashy:0.8>jessilorashy,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:jiangshuying:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:JiangXin4:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Jisoo
+      Blackpink:0.8>jisoo, pale skin, (glossy skin:1.1), looking at another, (seductive
+      smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Jisoo_v11:0.8>jisoo,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:jisooBlackpink_jisoo:0.8>jisoo,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:jisooOfBlackpink_v10:0.8>jisoo,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:jp002:0.8>(sybbjp002face,
+      sybbjp002breasts, (((narrow waist))), (((sagging breasts))), medium breasts),
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:jukujo:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:jwy___v1:0.8>jwy1,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:kanghyewon-v1:0.8>kanghyewon,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Karina:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Karina_v21:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Karina_v23:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Karina_v31:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:katoemiri_lora:0.8>katoemiri,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:KGEun2:0.8>KGEun,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:KHS_flux_rank16_bf16:0.8>KHS,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Kim
+      Eugene_2024042320.804:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Kim:0.8>borra,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:kimminju23-v1-noshuffle:0.8>kimminju,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:kinoshitayuuka_lora:0.8>kinoshitayuuka,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:kofan_lora:0.8>kofan,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:koikeyui_lora:0.8>koikeyui,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ksm:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ksxg:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:kuwajimamiku_lora:0.8>kuwajimamiku,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:kwoneunbilora:0.8>kwoneunbilora,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Lisa
+      Blackpink:0.8>lisa, lisa blackpink, pale skin, (glossy skin:1.1), looking at
+      another, (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed,
+      aroused, moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing
+      pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:LK_20230722151416:0.8>hai04,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:llfAnnie
+      Liu:0.8>, pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8),
+      (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:llfbaibing:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Maki
+      Yoko_20230823184820:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:makina69_naeun_v1.0:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:makina69_seolhyun_v1.3:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:makina69_shinsekyung_v2.1:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:makina69_shinsekyung_v3.0:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:makina69_tzuyu_v1.0:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Mina_v3:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:mix4:0.8>mix4,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Momo
+      Girls-v3:0.8>momo girls, pale skin, (glossy skin:1.1), looking at another, (seductive
+      smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Momo
+      Girls-v3_2:0.8>momo girls, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Momo_BRA:0.8>Momo,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:MomoGirls:0.8>momo
+      girls, pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8),
+      (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:nagasawamasami_lora:0.8>nagasawamasami,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:nagisahikari:0.8>av,
+      av actress, porn, japanese, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Nanase
+      Nishino_20230813094910:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:natsuko
+      godai:0.8>natsuko, pale skin, (glossy skin:1.1), looking at another, (seductive
+      smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Nayeon_V1.1:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:nayeonfinal:0.8>nytwnayeon,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:newjeans-hanni-V1:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:park_min-young:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:parkSoDamDogu:0.8>pasodam,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ran:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:rie
+      miyazawa:0.8>rie, pale skin, (glossy skin:1.1), looking at another, (seductive
+      smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Riho
+      Okumura_20240527185222:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Roh
+      jeong eui:0.8>, pale skin, (glossy skin:1.1), looking at another, (seductive
+      smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Rose
+      Blackpink:0.8>rose, rose blackpink, pale skin, (glossy skin:1.1), looking at
+      another, (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed,
+      aroused, moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing
+      pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ryoko_hirosue:0.8>ryoko,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Sana:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:satomi_v2.0:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:sd-No.159:0.8>{close-up|upper
+      body}, pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8),
+      (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:sei:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:shibari_body:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:shiraishimai_lora:0.8>shiraishimai,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:shoko
+      haida:0.8>Shoko, pale skin, (glossy skin:1.1), looking at another, (seductive
+      smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:songzhixiao:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Soo-bin-Chae:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:SoyeonV2:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:suzy_v21:0.8>suzy1,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:syjin
+      (1):0.8>syjin, pale skin, (glossy skin:1.1), looking at another, (seductive
+      smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:syjkr:0.8>syjkr,
+      woman, pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8),
+      (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Taeyeon_v2:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:takamia:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:teresa-v1:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tissue_Akiho_Yoshizawa_v1.5:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tissue_Karina_Flux_v1.1-LowRep:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tissue_SakuraYui_v1.5:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tissue_Suzy_v1.6:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tissue_Suzy_v2.5:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tissue_TsukiashiAmane_v1.5:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tissue_Twice_Nayeon_v1.5:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tissue_Yoona_v1.5:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Toda
+      Erika_20230731190833:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:try:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tsubasa1.2:0.8>Tsubasa,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tsubasa_flux_rank16_bf16:0.8>Tsubasa,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tsubasa_v11:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Twice
+      Momo:0.8>Momo, pale skin, (glossy skin:1.1), looking at another, (seductive
+      smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Twice_Tzuyu_v1.0:0.8>tztwtzuyu,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:tzuyu16:0.8>tztwtzuyu,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Tzuyu_5repeats_3.0:0.8>Chewy,
+      twtzuyu, pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8),
+      (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:tzuyuv2:0.8>tztwtzuyu,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:tzuyuv2:0.8>tztwtzuyu,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:vellaar_v1:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:yeonhee_chilloutmix_v2.0:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:yooalorashy:0.8>yooalorashy,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:yoojung_e105:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:yoona_v1:0.8>yoona1,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Yoshitaka
+      Yuriko_20230818064806:0.8>, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Young
+      Asian Female:0.8>{thai women|japan women|taiwan women|South Korea Women|Hong
+      Kong Women|Singapore Women}, pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), parted lips, pink lipstick, (wearing pink
+      lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ytyx:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:yuko
+      fueki:0.8>, pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8),
+      (angry:0.7), (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6),
+      (shocked:1.2), parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:ZhaoJinmai-3:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Zoe:0.8>,
+      pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
+      (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP]'
+    neg_prompt: (worst quality, low quality, normal quality, lowres, bokeh, blur:2.0),
+      (polydactyly, polydactylism:2.0)
+    max_det: 1
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
-    control_module: inpaint_global_harmonious
-    sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    control_module: None
+    sep_noise: true
+    inpaint_width: 512
+    inpaint_height: 512
     use_noise_mask: false
     mask_merge_mode: false
-    sep_ckpt: false
-    sep_ckpt_name: Use Global
-    sep_vae: false
-    sep_vae_name: Use Global
-    sep_sampler: false
-    sampler_name: Euler a Karras
-    sep_steps: false
-    steps: 20
+    sep_ckpt: true
+    sep_ckpt_name: henmix_real_v6b-fp16-no-ema.safetensors
+    sep_vae: true
+    sep_vae_name: vae-ft-mse-840000-ema-pruned.ckpt.vae.pt
+    sep_sampler: true
+    sampler_name: DPM++ 2M Karras
+    sep_steps: true
+    steps: 22
     sep_cfg: false
     cfg_scale: 7.0
-    sep_clip: false
+    sep_clip: true
     clip_skip: 2
-    restore_face: false
+    restore_face: true
     conf_thresh: 0.35
     min_face_ratio: 0.01
     max_face_ratio: 1.0
@@ -193,41 +1225,57 @@ ui_settings:
     noise_multiplier: 1.0
     seed: -1
   패스 4:
-    enabled: false
-    detector_model: adetailerAfterDetailer_v10.pt
+    enabled: true
+    detector_model: Anzhc Breasts Seg v1 1024n.pt
     use_sam: false
     auto_prompt_injection: true
-    gender_filter: All
+    gender_filter: Female
     ignore_edge_touching: false
-    anatomy_check: true
-    auto_rotate: true
+    anatomy_check: false
+    auto_rotate: false
     color_fix: None
     use_hires_fix: false
-    pos_prompt: ''
-    neg_prompt: ''
-    max_det: 20
+    pos_prompt: 'score 9, score 8 up, score 7 up, score 6 up, zPDXL3, 8k uhd, (pale
+      skin:0.9), (large breasts:1.1), (detailed nipples, normal nipples, cute nipples,
+      puffy nipples), [SEP],
+
+      score 9, score 8 up, score 7 up, score 6 up, zPDXL3, 8k uhd, [SEP],
+
+      [SKIP][SEP],
+
+      #(gigantic breasts:1.4), detailed nipples, normal nipples, cute nipples, puffy
+      pink nipples, RAW photo, (completely nude:1.4), <lora:polyhedron_new_skin_v1.1:0.1>detailed
+      skin, skin blemish, (high detailed skin:1.2), 8k uhd, dslr, soft lighting, high
+      quality, film grain, Fujifilm XT3, (glossy skin:1.3), [SEP]'
+    neg_prompt: 'score 6, score 5, score 4, pony, muscular, makeup, censored, furry,
+      (child, kid, chibi:1.1), big breasts, big chest, cgi, [SEP],
+
+      #(low resolution:1.5), (worst quality:1.5), (low quality:1.5), logo, signature,
+      watermark, BadDream, UnrealisticDream, [SEP]'
+    max_det: 1
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
-    control_module: inpaint_global_harmonious
+    control_module: None
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
-    sep_ckpt: false
-    sep_ckpt_name: Use Global
-    sep_vae: false
-    sep_vae_name: Use Global
-    sep_sampler: false
-    sampler_name: Euler a Karras
-    sep_steps: false
-    steps: 20
+    sep_ckpt: true
+    sep_ckpt_name: pinkiepiePonyMix_v36Fp16.safetensors
+    sep_vae: true
+    sep_vae_name: sdxl_vae.safetensors
+    sep_sampler: true
+    sampler_name: DPM++ 2M Karras
+    sep_steps: true
+    steps: 22
     sep_cfg: false
     cfg_scale: 7.0
-    sep_clip: false
+    sep_clip: true
     clip_skip: 2
     restore_face: false
-    conf_thresh: 0.35
+    conf_thresh: 0.3
     min_face_ratio: 0.01
     max_face_ratio: 1.0
     denoising_strength: 0.4
@@ -260,12 +1308,13 @@ ui_settings:
     pos_prompt: ''
     neg_prompt: ''
     max_det: 20
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: false
@@ -314,12 +1363,13 @@ ui_settings:
     pos_prompt: ''
     neg_prompt: ''
     max_det: 20
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: false
@@ -368,12 +1418,13 @@ ui_settings:
     pos_prompt: ''
     neg_prompt: ''
     max_det: 20
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: false
@@ -422,12 +1473,13 @@ ui_settings:
     pos_prompt: ''
     neg_prompt: ''
     max_det: 20
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: false
@@ -476,12 +1528,13 @@ ui_settings:
     pos_prompt: ''
     neg_prompt: ''
     max_det: 20
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: false
@@ -530,12 +1583,13 @@ ui_settings:
     pos_prompt: ''
     neg_prompt: ''
     max_det: 20
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: false
@@ -584,12 +1638,13 @@ ui_settings:
     pos_prompt: ''
     neg_prompt: ''
     max_det: 20
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: false
@@ -638,12 +1693,13 @@ ui_settings:
     pos_prompt: ''
     neg_prompt: ''
     max_det: 20
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: false
@@ -692,12 +1748,13 @@ ui_settings:
     pos_prompt: ''
     neg_prompt: ''
     max_det: 20
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: false
@@ -746,12 +1803,13 @@ ui_settings:
     pos_prompt: ''
     neg_prompt: ''
     max_det: 20
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: false
@@ -800,12 +1858,13 @@ ui_settings:
     pos_prompt: ''
     neg_prompt: ''
     max_det: 20
+    sort_method: 신뢰도
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
     sep_noise: false
-    inpaint_width: 0
-    inpaint_height: 0
+    inpaint_width: 1024
+    inpaint_height: 1024
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: false

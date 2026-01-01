@@ -69,7 +69,17 @@ def draw_detections(image, detections):
         cv2.rectangle(vis_img, (x1, y1), (x2, y2), color, thickness)
         
         # 라벨 그리기
-        label = f"{conf:.2f}" 
+        label = f"#{i+1} {conf:.2f}" 
+        
+        # [New] LoRA 정보 표시 (확장자 제거 및 간략화)
+        lora_names = det.get('lora_names', [])
+        if lora_names:
+            display_names = [n.replace(".safetensors", "").replace(".ckpt", "").replace(".pt", "") for n in lora_names]
+            if len(display_names) > 2:
+                lora_str = ",".join(display_names[:2]) + "..."
+            else:
+                lora_str = ",".join(display_names)
+            label += f" L:{lora_str}"
         
         (w, h), baseline = cv2.getTextSize(label, font, font_scale, 1)
         y_text = y1 - 5 if y1 - 20 > 0 else y1 + h + 5
@@ -81,3 +91,34 @@ def draw_detections(image, detections):
         cv2.putText(vis_img, label, (x1, y_text - 5), font, font_scale, text_color, 1, cv2.LINE_AA)
         
     return vis_img
+
+def draw_mask_on_image(image, mask, color=(0, 255, 0), alpha=0.4):
+    """
+    단일 마스크를 이미지 위에 오버레이합니다. (실시간 처리 확인용)
+    """
+    vis = image.copy()
+    overlay = vis.copy()
+    
+    if mask.shape[:2] != vis.shape[:2]:
+        mask = cv2.resize(mask, (vis.shape[1], vis.shape[0]), interpolation=cv2.INTER_NEAREST)
+    
+    # Mask Threshold
+    if mask.max() > 1:
+        mask_bool = mask > 127
+    else:
+        mask_bool = mask > 0.5
+        
+    overlay[mask_bool] = color
+    
+    # Blend
+    cv2.addWeighted(overlay, alpha, vis, 1 - alpha, 0, vis)
+    
+    # Contour
+    try:
+        mask_u8 = (mask_bool.astype(np.uint8)) * 255
+        contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(vis, contours, -1, color, 2)
+    except Exception:
+        pass
+        
+    return vis

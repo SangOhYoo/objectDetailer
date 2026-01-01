@@ -177,6 +177,11 @@ class MainWindow(QMainWindow):
         self.progress_bar = QProgressBar()
         self.progress_bar.setMaximumWidth(300)
         self.progress_bar.setVisible(False)
+
+        self.status_filename_label = QLabel("")
+        self.status_filename_label.setStyleSheet("margin-left: 10px;")
+
+        self.statusBar().addPermanentWidget(self.status_filename_label)
         self.statusBar().addPermanentWidget(self.progress_bar)
         self.statusBar().showMessage("[System] Initialized. Ready.")
 
@@ -279,6 +284,18 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.log(f"Error loading preview: {e}")
 
+    def set_ui_enabled(self, enabled):
+        """처리 중 UI 활성화/비활성화 제어"""
+        self.btn_load.setEnabled(enabled)
+        self.btn_run.setEnabled(enabled)
+        self.tabs.setEnabled(enabled)
+        self.global_group.setEnabled(enabled)
+        self.file_queue.setEnabled(enabled)
+        
+        # 중지 버튼은 반대로 동작 (실행 중일 때만 활성화)
+        self.btn_stop.setEnabled(not enabled)
+        self.btn_stop.setStyleSheet("background-color: #d32f2f; color: white;" if not enabled else "background-color: #cccccc; color: #666666;")
+
     def start_processing(self):
         files = self.file_queue.get_all_files()
         if not files:
@@ -296,6 +313,8 @@ class MainWindow(QMainWindow):
                 # 각 탭 설정에 글로벌 설정 주입
                 cfg_data['global_ckpt_name'] = global_ckpt
                 cfg_data['global_vae_name'] = global_vae
+                # [Fix] 로그 가시성을 위해 패스 이름 주입
+                cfg_data['unit_name'] = tab.unit_name
                 configs.append(cfg_data)
 
         if not configs:
@@ -306,10 +325,14 @@ class MainWindow(QMainWindow):
         if self.controller:
             self.controller.stop()
 
+        # UI 비활성화 (중지 버튼 제외)
+        self.set_ui_enabled(False)
+
         self.log("Starting batch processing...")
         self.controller = ProcessingController(files, configs)
         self.controller.log_signal.connect(self.log)
         self.controller.progress_signal.connect(self.update_progress)
+        self.controller.file_started_signal.connect(self.update_status_filename)
         self.controller.preview_signal.connect(self.update_preview)
         self.controller.result_signal.connect(self.handle_result)
         self.controller.start_processing()
@@ -331,6 +354,12 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(current)
         if current >= total:
             self.progress_bar.setVisible(False)
+            self.status_filename_label.setText("")
+            # 모든 작업 완료 시 UI 다시 활성화
+            self.set_ui_enabled(True)
+
+    def update_status_filename(self, filename):
+        self.status_filename_label.setText(f"Processing: {filename}")
 
     def update_preview(self, img):
         self.sub_view.set_image(img)
@@ -339,6 +368,8 @@ class MainWindow(QMainWindow):
         self.log("Stopping processing...")
         if self.controller:
             self.controller.stop()
+        # 중지 시 UI 다시 활성화
+        self.set_ui_enabled(True)
 
     def on_global_ckpt_changed(self, text):
         """글로벌 모델 변경 시 각 탭에 알림 (UI 동적 업데이트)"""

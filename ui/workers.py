@@ -5,6 +5,14 @@ import torch
 import traceback
 from queue import Queue
 from PyQt6.QtCore import QThread, pyqtSignal, QObject
+
+# [Fix] GFPGAN(BasicSR)과 torchvision 0.17+ 호환성 패치
+import torchvision
+if not hasattr(torchvision.transforms, "functional_tensor"):
+    import torchvision.transforms.functional as F
+    import sys
+    sys.modules["torchvision.transforms.functional_tensor"] = F
+
 from core.pipeline import ImageProcessor  # 로직 위임
 from core.config import config_instance as cfg
 from core.metadata import save_image_with_metadata
@@ -94,6 +102,14 @@ class GpuWorker(QThread):
         self.log_signal.emit(f"[Worker-{self.worker_id}] {msg}")
 
     def relay_preview(self, img):
+        # [Fix] ImageProcessor가 PIL 이미지를 보낼 경우를 대비해 Numpy(BGR) 변환
+        if img is not None and not isinstance(img, np.ndarray):
+            try:
+                img = np.array(img)
+                if img.ndim == 3 and img.shape[2] == 3:
+                    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            except Exception:
+                pass
         self.preview_signal.emit(img)
 
     def stop(self):
@@ -131,6 +147,9 @@ class GpuWorker(QThread):
                     self.relay_log("Error: Load failed.")
                     self.result_signal.emit(fpath, None)
                     continue
+                
+                # [Fix] 실시간 진행 상황 확인을 위해 원본 이미지 먼저 전송
+                self.relay_preview(img)
                 
                 # Processor에게 작업 위임
                 result_img = self.processor.process(img, self.configs)

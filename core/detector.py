@@ -10,12 +10,20 @@ try:
 except ImportError:
     HAS_MEDIAPIPE = False
 
+try:
+    import insightface
+    from insightface.app import FaceAnalysis
+    HAS_INSIGHTFACE = True
+except ImportError:
+    HAS_INSIGHTFACE = False
+
 class ObjectDetector:
     def __init__(self, device="cuda", model_dir=None):
         self.device = device
         self.model_dir = model_dir if model_dir else os.path.join("models", "adetailer")
         self.yolo_models = {}
         self.mp_face_mesh = None
+        self.face_analysis = None
 
     def detect(self, image: np.ndarray, model_name: str, conf: float = 0.3) -> list:
         if "mediapipe" in model_name.lower():
@@ -49,8 +57,9 @@ class ObjectDetector:
         
         try:
             results = model.predict(image, conf=conf, device=device_arg, verbose=False)
-        except NotImplementedError:
-            print(f"[Detector] Warning: GPU inference failed (Meta tensor error). Reloading model on CPU for {model_name}.")
+        except (NotImplementedError, RuntimeError) as e:
+            # [Fix] Meta tensor error handling (accelerate conflict)
+            print(f"[Detector] Warning: Inference failed ({e}). Attempting CPU fallback for {model_name}.")
             
             # Reload model to recover from broken state (Meta device)
             if model_name in self.yolo_models:
@@ -60,22 +69,18 @@ class ObjectDetector:
             model_path = os.path.join(self.model_dir, filename)
             load_target = model_path if os.path.exists(model_path) else filename
             
-            # [Fix] Manually load checkpoint to CPU to bypass meta-device context
+            # [Fix] Simply reload model from path to recover from Meta tensor error
             try:
-                ckpt = torch.load(load_target, map_location='cpu')
-                if isinstance(ckpt, dict) and 'model' in ckpt:
-                    model = YOLO(ckpt['model'])
-                else:
-                    model = YOLO(load_target)
-            except Exception as e:
-                print(f"[Detector] Manual load failed: {e}. Using standard reload.")
                 model = YOLO(load_target)
+            except Exception as e:
+                print(f"[Detector] CPU Reload failed: {e}")
+                return []
 
             self.yolo_models[model_name] = model
             try:
                 results = model.predict(image, conf=conf, device='cpu', verbose=False)
             except Exception as e:
-                print(f"[Detector] CPU inference also failed: {e}")
+                print(f"[Detector] CPU inference also failed (Skipping detection): {e}")
                 return []
         
         detections = []
@@ -115,14 +120,14 @@ class ObjectDetector:
 
         if self.mp_face_mesh is None:
             # refine_landmarks=True for better eye/iris detection if needed
-            self.mp_face_masks = mp.solutions.face_mesh.FaceMesh(
+            self.mp_face_mesh = mp.solutions.face_mesh.FaceMesh(
                 static_image_mode=True, max_num_faces=10, 
                 refine_landmarks=True, min_detection_confidence=0.5
             )
 
         h, w = image.shape[:2]
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        results = self.mp_face_masks.process(rgb)
+        results = self.mp_face_mesh.process(rgb)
 
         detections = []
         if results.multi_face_landmarks:
@@ -156,3 +161,77 @@ class ObjectDetector:
                     'mask': mask  # Polygon mask returned
                 })
         return detections
+
+    def get_face_landmarks(self, image, box):
+        """
+        YOLO 박스 영역 내에서 MediaPipe를 실행하여 5개 핵심 랜드마크를 추출합니다.
+        반환: [[x,y], ...] (Left Eye, Right Eye, Nose, Left Mouth, Right Mouth)
+        """
+        if not HAS_MEDIAPIPE: return None
+        
+        if self.mp_face_mesh is None:
+            self.mp_face_mesh = mp.solutions.face_mesh.FaceMesh(
+                static_image_mode=True, max_num_faces=10, 
+                refine_landmarks=True, min_detection_confidence=0.5
+            )
+            
+        h, w = image.shape[:2]
+        x1, y1, x2, y2 = map(int, box)
+        
+        # 박스보다 약간 넓게 크롭하여 랜드마크 검출 (안정성 확보)
+        pad_x = int((x2 - x1) * 0.2)
+        pad_y = int((y2 - y1) * 0.2)
+        cx1, cy1 = max(0, x1 - pad_x), max(0, y1 - pad_y)
+        cx2, cy2 = min(w, x2 + pad_x), min(h, y2 + pad_y)
+        
+        crop = image[cy1:cy2, cx1:cx2]
+        if crop.size == 0: return None
+        
+        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        results = self.mp_face_mesh.process(rgb)
+        
+        if not results.multi_face_landmarks: return None
+        
+        # 가장 첫 번째 얼굴 사용
+        face_landmarks = results.multi_face_landmarks[0]
+        ch, cw = crop.shape[:2]
+        
+        # MediaPipe Mesh Indices: L_Eye(33), R_Eye(263), Nose(1), L_Mouth(61), R_Mouth(291)
+        indices = [33, 263, 1, 61, 291]
+        kps = [[int(face_landmarks.landmark[i].x * cw) + cx1, int(face_landmarks.landmark[i].y * ch) + cy1] for i in indices]
+        
+        return kps
+
+    def analyze_gender(self, image, box):
+        """
+        InsightFace를 사용하여 박스 영역의 성별을 판별합니다.
+        반환값: "Male", "Female", 또는 None (판별 불가/라이브러리 없음)
+        """
+        if not HAS_INSIGHTFACE:
+            return None
+            
+        if self.face_analysis is None:
+            # buffalo_l 모델 팩 사용 (가볍고 빠름)
+            self.face_analysis = FaceAnalysis(name='buffalo_l', providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+            self.face_analysis.prepare(ctx_id=0, det_size=(640, 640))
+        
+        x1, y1, x2, y2 = map(int, box)
+        h, w = image.shape[:2]
+        
+        # 문맥 파악을 위해 박스보다 넓게 크롭
+        pad_x = int((x2 - x1) * 0.25)
+        pad_y = int((y2 - y1) * 0.25)
+        cx1, cy1 = max(0, x1 - pad_x), max(0, y1 - pad_y)
+        cx2, cy2 = min(w, x2 + pad_x), min(h, y2 + pad_y)
+        
+        crop = image[cy1:cy2, cx1:cx2]
+        if crop.size == 0: return None
+        
+        faces = self.face_analysis.get(crop)
+        if not faces: return None
+        
+        # 가장 큰 얼굴 기준
+        face = max(faces, key=lambda x: (x.bbox[2]-x.bbox[0]) * (x.bbox[3]-x.bbox[1]))
+        
+        # InsightFace Gender: 1=Male, 0=Female
+        return "Male" if face.gender == 1 else "Female"

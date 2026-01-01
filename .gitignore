@@ -32,3 +32,14 @@ Thumbs.db
 # Coverage reports
 .coverage
 htmlcov/
+
+# [Added] AI Model Weights (Large files)
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+gfpgan/weights/
+models/
+outputs/

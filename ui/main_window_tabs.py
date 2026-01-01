@@ -26,14 +26,11 @@ class AdetailerUnitWidget(QWidget):
         scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
         
         content_widget = QWidget()
-        # 전체 레이아웃: 좌우 2열 그리드
-        self.layout = QGridLayout(content_widget)
-        self.layout.setSpacing(8)
-        self.layout.setContentsMargins(4, 4, 4, 4)
+        # [Revert] 전체 레이아웃: 단일 컬럼 방식 (1열) - 안정성 확보
+        self.main_layout = QVBoxLayout(content_widget)
+        self.main_layout.setSpacing(10)
+        self.main_layout.setContentsMargins(4, 4, 4, 4)
 
-        # =================================================
-        # [LEFT COLUMN] 1. 모델 및 모드 설정
-        # =================================================
         group_model = QGroupBox("1. 모델 및 모드 (Model & Mode)")
         layout_model = QGridLayout()
         layout_model.setContentsMargins(5, 8, 5, 5)
@@ -78,11 +75,37 @@ class AdetailerUnitWidget(QWidget):
         
         group_model.setLayout(layout_model)
         group_model.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        self.layout.addWidget(group_model, 0, 0)
+        self.main_layout.addWidget(group_model)
 
-        # =================================================
-        # [LEFT] 3. 감지 및 필터 (Detection) - Max Size 추가됨
-        # =================================================
+        group_prompt = QGroupBox("2. 프롬프트 및 자동화")
+        layout_prompt = QVBoxLayout()
+        layout_prompt.setContentsMargins(5, 8, 5, 5)
+        
+        self.chk_auto_prompt = QCheckBox("✨ 자동 프롬프트 주입 (Auto Injection)")
+        self.chk_auto_prompt.setChecked(self.saved_config.get('auto_prompt_injection', True))
+        self.chk_auto_prompt.setStyleSheet("color: #e67e22; font-weight: bold;")
+
+        self.txt_pos = QTextEdit()
+        self.txt_pos.setPlaceholderText("Positive Prompt (e.g. detailed face, high quality)")
+        self.txt_pos.setText(self.saved_config.get('pos_prompt', ""))
+        self.txt_pos.setMaximumHeight(50)
+        self.txt_pos.setStyleSheet("border: 2px solid #4dabf7; border-radius: 4px; padding: 4px;")
+        self.txt_pos.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        
+        self.txt_neg = QTextEdit()
+        self.txt_neg.setPlaceholderText("Negative Prompt (e.g. low quality, blurry)")
+        self.txt_neg.setText(self.saved_config.get('neg_prompt', ""))
+        self.txt_neg.setMaximumHeight(40)
+        self.txt_neg.setStyleSheet("border: 2px solid #e74c3c; border-radius: 4px; padding: 4px;")
+        self.txt_neg.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        
+        layout_prompt.addWidget(self.chk_auto_prompt)
+        layout_prompt.addWidget(self.txt_pos)
+        layout_prompt.addWidget(self.txt_neg)
+        group_prompt.setLayout(layout_prompt)
+        group_prompt.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.main_layout.addWidget(group_prompt)
+
         group_detect = QGroupBox("3. 감지 및 필터 (Detection)")
         layout_detect = QGridLayout()
         layout_detect.setContentsMargins(5, 8, 5, 5)
@@ -149,11 +172,21 @@ class AdetailerUnitWidget(QWidget):
         layout_detect.addLayout(layout_sort_radios, 5, 1, 1, 2)
 
         group_detect.setLayout(layout_detect)
-        self.layout.addWidget(group_detect, 1, 0)
+        self.main_layout.addWidget(group_detect)
 
-        # =================================================
-        # [LEFT] 5. 인페인팅 설정 (Inpaint) - Mask Merge 추가됨
-        # =================================================
+        group_mask = QGroupBox("4. 마스크 전처리 (Mask)")
+        layout_mask = QGridLayout()
+        layout_mask.setContentsMargins(5, 8, 5, 5)
+        
+        self.add_slider_row(layout_mask, 1, "확장(Dilation):", "mask_dilation", -64, 64, 4, 1)
+        self.add_slider_row(layout_mask, 2, "침식(Erosion):", "mask_erosion", 0, 64, 0, 1)
+        self.add_slider_row(layout_mask, 3, "블러(Blur):", "mask_blur", 0, 64, 12, 1)
+        self.add_slider_row(layout_mask, 4, "X 오프셋:", "x_offset", -100, 100, 0, 1)
+        self.add_slider_row(layout_mask, 5, "Y 오프셋:", "y_offset", -100, 100, 0, 1)
+        
+        group_mask.setLayout(layout_mask)
+        self.main_layout.addWidget(group_mask)
+
         group_inpaint = QGroupBox("5. 인페인팅 설정 (Inpaint)")
         layout_inpaint = QGridLayout()
         layout_inpaint.setContentsMargins(5, 8, 5, 5)
@@ -198,74 +231,8 @@ class AdetailerUnitWidget(QWidget):
         layout_inpaint.addWidget(self.chk_auto_rotate, 5, 0, 1, 2)
 
         group_inpaint.setLayout(layout_inpaint)
-        self.layout.addWidget(group_inpaint, 2, 0)
+        self.main_layout.addWidget(group_inpaint)
 
-        # =================================================
-        # [LEFT BOTTOM] 8. SAM 세부 설정 (SAM)
-        # =================================================
-        group_sam = QGroupBox("8. SAM 세부 설정 (SAM Settings)")
-        layout_sam = QGridLayout()
-        layout_sam.setContentsMargins(5, 8, 5, 5)
-        
-        self.add_slider_row(layout_sam, 0, "Points/Side:", "sam_points_per_side", 1, 64, 32, 1)
-        self.add_slider_row(layout_sam, 1, "Pred IOU:", "sam_pred_iou_thresh", 0.0, 1.0, 0.88, 0.01)
-        self.add_slider_row(layout_sam, 2, "Stability:", "sam_stability_score_thresh", 0.0, 1.0, 0.95, 0.01)
-        
-        group_sam.setLayout(layout_sam)
-        self.layout.addWidget(group_sam, 3, 0)
-
-
-        # =================================================
-        # [RIGHT COLUMN] 2. 프롬프트 및 자동화
-        # =================================================
-        group_prompt = QGroupBox("2. 프롬프트 및 자동화")
-        layout_prompt = QVBoxLayout()
-        layout_prompt.setContentsMargins(5, 8, 5, 5)
-        
-        self.chk_auto_prompt = QCheckBox("✨ 자동 프롬프트 주입 (Auto Injection)")
-        self.chk_auto_prompt.setChecked(self.saved_config.get('auto_prompt_injection', True))
-        self.chk_auto_prompt.setStyleSheet("color: #e67e22; font-weight: bold;")
-
-        self.txt_pos = QTextEdit()
-        self.txt_pos.setPlaceholderText("Positive Prompt (e.g. detailed face, high quality)")
-        self.txt_pos.setText(self.saved_config.get('pos_prompt', ""))
-        self.txt_pos.setMaximumHeight(50)
-        # 50:50 비율 유지를 위해 Expanding 방지
-        self.txt_pos.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        
-        self.txt_neg = QTextEdit()
-        self.txt_neg.setPlaceholderText("Negative Prompt (e.g. low quality, blurry)")
-        self.txt_neg.setText(self.saved_config.get('neg_prompt', ""))
-        self.txt_neg.setMaximumHeight(40)
-        # 50:50 비율 유지를 위해 Expanding 방지
-        self.txt_neg.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        
-        layout_prompt.addWidget(self.chk_auto_prompt)
-        layout_prompt.addWidget(self.txt_pos)
-        layout_prompt.addWidget(self.txt_neg)
-        group_prompt.setLayout(layout_prompt)
-        group_prompt.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        self.layout.addWidget(group_prompt, 0, 1)
-
-        # =================================================
-        # [RIGHT] 4. 마스크 전처리 (Mask)
-        # =================================================
-        group_mask = QGroupBox("4. 마스크 전처리 (Mask)")
-        layout_mask = QGridLayout()
-        layout_mask.setContentsMargins(5, 8, 5, 5)
-        
-        self.add_slider_row(layout_mask, 1, "확장(Dilation):", "mask_dilation", -64, 64, 4, 1)
-        self.add_slider_row(layout_mask, 2, "침식(Erosion):", "mask_erosion", 0, 64, 0, 1)
-        self.add_slider_row(layout_mask, 3, "블러(Blur):", "mask_blur", 0, 64, 12, 1)
-        self.add_slider_row(layout_mask, 4, "X 오프셋:", "x_offset", -100, 100, 0, 1)
-        self.add_slider_row(layout_mask, 5, "Y 오프셋:", "y_offset", -100, 100, 0, 1)
-        
-        group_mask.setLayout(layout_mask)
-        self.layout.addWidget(group_mask, 1, 1)
-
-        # =================================================
-        # [RIGHT] 6. ControlNet & BMAP - Preprocessor 추가됨
-        # =================================================
         group_adv = QGroupBox("6. ControlNet & BMAP")
         layout_adv = QGridLayout()
         layout_adv.setContentsMargins(5, 8, 5, 5)
@@ -310,11 +277,8 @@ class AdetailerUnitWidget(QWidget):
         self.add_slider_row(layout_adv, 7, "노이즈 배율:", "noise_multiplier", 0.5, 1.5, 1.0, 0.05)
         
         group_adv.setLayout(layout_adv)
-        self.layout.addWidget(group_adv, 2, 1)
+        self.main_layout.addWidget(group_adv)
 
-        # =================================================
-        # [RIGHT BOTTOM] 7. 개별 패스 고급 설정 (Overrides)
-        # =================================================
         group_override = QGroupBox("7. 개별 패스 고급 설정 (Overrides)")
         layout_override = QGridLayout()
         layout_override.setContentsMargins(5, 8, 5, 5)
@@ -402,12 +366,21 @@ class AdetailerUnitWidget(QWidget):
         layout_override.addWidget(self.chk_restore_face, 2, 2, 1, 2)
 
         group_override.setLayout(layout_override)
-        self.layout.addWidget(group_override, 3, 1)
+        self.main_layout.addWidget(group_override)
 
-        # 레이아웃 균형 (좌우 50:50)
-        self.layout.setColumnStretch(0, 1)
-        self.layout.setColumnStretch(1, 1)
-        self.layout.setRowStretch(4, 1) # 하단 여백 확보
+        group_sam = QGroupBox("8. SAM 세부 설정 (SAM Settings)")
+        layout_sam = QGridLayout()
+        layout_sam.setContentsMargins(5, 8, 5, 5)
+        
+        self.add_slider_row(layout_sam, 0, "Points/Side:", "sam_points_per_side", 1, 64, 32, 1)
+        self.add_slider_row(layout_sam, 1, "Pred IOU:", "sam_pred_iou_thresh", 0.0, 1.0, 0.88, 0.01)
+        self.add_slider_row(layout_sam, 2, "Stability:", "sam_stability_score_thresh", 0.0, 1.0, 0.95, 0.01)
+        
+        group_sam.setLayout(layout_sam)
+        self.main_layout.addWidget(group_sam)
+
+        # 빈 공간(Stretch)을 추가하여 위젯들을 상단으로 정렬
+        self.main_layout.addStretch(1)
         
         scroll.setWidget(content_widget)
         

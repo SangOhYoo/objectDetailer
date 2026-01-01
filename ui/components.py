@@ -22,7 +22,7 @@ class ImageCanvas(QLabel):
     def __init__(self):
         super().__init__()
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setStyleSheet("background-color: #1e1e1e; border: 1px solid #444;")
+        self.set_theme("dark")
         self.setMinimumSize(400, 400) 
         self.original_pixmap = None
         self.image = None
@@ -80,6 +80,12 @@ class ImageCanvas(QLabel):
             is_left = event.button() == Qt.MouseButton.LeftButton
             self.point_clicked.emit(x, y, is_left)
 
+    def set_theme(self, mode):
+        if mode == "dark":
+            self.setStyleSheet("background-color: #1e1e1e; border: 1px solid #444;")
+        else:
+            self.setStyleSheet("background-color: #f0f0f0; border: 1px solid #cccccc;")
+
 
 # =========================================================
 # 2. [수정됨] ComparisonViewer (Before/After 스플리터)
@@ -96,7 +102,8 @@ class ComparisonViewer(QWidget):
         self.is_dragging = False
         
         self.setMouseTracking(True)
-        self.setStyleSheet("background-color: #222; border: 1px solid #444;")
+        self.text_color = Qt.GlobalColor.white
+        self.set_theme("dark")
         self.setMinimumSize(300, 300)
 
     def set_images(self, src_img, dst_img):
@@ -137,7 +144,7 @@ class ComparisonViewer(QWidget):
         
         if not self.pixmap_before or not self.pixmap_after:
             # print("[DEBUG] No images to draw. Drawing placeholder text.")
-            painter.setPen(Qt.GlobalColor.white)
+            painter.setPen(self.text_color)
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "이미지 없음 (Before / After)")
             return
 
@@ -207,6 +214,14 @@ class ComparisonViewer(QWidget):
         self.slider_pos = max(0.0, min(1.0, mouse_x / self.width()))
         self.update()
 
+    def set_theme(self, mode):
+        if mode == "dark":
+            self.setStyleSheet("background-color: #222; border: 1px solid #444;")
+            self.text_color = Qt.GlobalColor.white
+        else:
+            self.setStyleSheet("background-color: #e0e0e0; border: 1px solid #cccccc;")
+            self.text_color = Qt.GlobalColor.black
+        self.update()
 
 # =========================================================
 # 3. [빨간 박스] 멀티 파일 업로드 대기열 (드래그앤드롭)
@@ -225,10 +240,6 @@ class FileQueueWidget(QWidget):
         self.btn_del_sel = QPushButton("선택 삭제")
         self.btn_del_all = QPushButton("전체 삭제")
         
-        self.btn_add.setStyleSheet("background-color: #444; color: white;")
-        self.btn_del_sel.setStyleSheet("background-color: #555; color: white;")
-        self.btn_del_all.setStyleSheet("background-color: #d9534f; color: white;")
-        
         toolbar.addWidget(self.btn_add)
         toolbar.addWidget(self.btn_del_sel)
         toolbar.addWidget(self.btn_del_all)
@@ -240,7 +251,6 @@ class FileQueueWidget(QWidget):
         self.list_widget.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.list_widget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.list_widget.setSpacing(5)
-        self.list_widget.setStyleSheet("background-color: #2b2b2b; border: 1px solid #444;")
         
         self.setAcceptDrops(True)
         self.list_widget.setAcceptDrops(False)
@@ -252,6 +262,8 @@ class FileQueueWidget(QWidget):
         self.btn_add.clicked.connect(self._open_file_dialog)
         self.btn_del_all.clicked.connect(self.list_widget.clear)
         self.btn_del_sel.clicked.connect(self._delete_selected)
+        
+        self.set_theme("dark")
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -315,6 +327,18 @@ class FileQueueWidget(QWidget):
                 self.list_widget.setCurrentItem(item)
                 self.list_widget.scrollToItem(item)
                 break
+
+    def set_theme(self, mode):
+        if mode == "dark":
+            self.list_widget.setStyleSheet("background-color: #2b2b2b; border: 1px solid #444; color: #eee;")
+            self.btn_add.setStyleSheet("background-color: #444; color: white; border: 1px solid #555;")
+            self.btn_del_sel.setStyleSheet("background-color: #555; color: white; border: 1px solid #666;")
+            self.btn_del_all.setStyleSheet("background-color: #d9534f; color: white; border: 1px solid #c9302c;")
+        else:
+            self.list_widget.setStyleSheet("background-color: #ffffff; border: 1px solid #cccccc; color: #333;")
+            self.btn_add.setStyleSheet("background-color: #f0f0f0; color: #333; border: 1px solid #ccc;")
+            self.btn_del_sel.setStyleSheet("background-color: #f0f0f0; color: #333; border: 1px solid #ccc;")
+            self.btn_del_all.setStyleSheet("background-color: #d9534f; color: white; border: 1px solid #d43f3a;")
 
 # =========================================================
 # 4. 로그 콘솔 (기존 유지)

@@ -3,8 +3,8 @@ import os
 import cv2
 import numpy as np
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                             QTabWidget, QLabel, QPushButton, QSplitter, 
-                             QTextEdit, QComboBox, QGroupBox, QFileDialog, QSizePolicy,
+                             QStackedWidget, QButtonGroup, QLabel, QPushButton, QSplitter, 
+                             QTextEdit, QComboBox, QGroupBox, QFileDialog, QSizePolicy, QGridLayout,
                              QMenu, QMessageBox, QProgressBar)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QActionGroup
@@ -18,7 +18,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Standalone ADetailer - Dual GPU Edition")
-        self.resize(1600, 1200) # 기본 사이즈
+        self.resize(2390, 1885) # 기본 사이즈
         
         self.controller = None
         
@@ -78,7 +78,7 @@ class MainWindow(QMainWindow):
         
         # 1. Global Model Settings
         self.global_group = QGroupBox("🛠️ 기본 모델 설정 (Global)")
-        global_layout = QHBoxLayout()
+        global_layout = QGridLayout()
         
         self.combo_global_ckpt = QComboBox()
         ckpt_dir = cfg.get_path('checkpoint')
@@ -95,10 +95,10 @@ class MainWindow(QMainWindow):
         else:
             self.combo_global_vae.addItem("Automatic")
         
-        global_layout.addWidget(QLabel("체크포인트:"))
-        global_layout.addWidget(self.combo_global_ckpt, 2)
-        global_layout.addWidget(QLabel("VAE:"))
-        global_layout.addWidget(self.combo_global_vae, 1)
+        global_layout.addWidget(QLabel("체크포인트:"), 0, 0)
+        global_layout.addWidget(self.combo_global_ckpt, 0, 1)
+        global_layout.addWidget(QLabel("VAE:"), 0, 2)
+        global_layout.addWidget(self.combo_global_vae, 0, 3)
         
         self.combo_global_ckpt.currentTextChanged.connect(self.on_global_ckpt_changed)
 
@@ -113,23 +113,61 @@ class MainWindow(QMainWindow):
         btn_global_load.clicked.connect(self.load_global_settings)
         btn_global_load.setMaximumWidth(70)
 
-        global_layout.addWidget(btn_global_save)
-        global_layout.addWidget(btn_global_load)
+        global_layout.addWidget(btn_global_save, 0, 4)
+        global_layout.addWidget(btn_global_load, 0, 5)
+        
+        # [Fix] 콤보박스 비율 50:50 강제 (컬럼 1과 3의 확장 비율을 1:1로 설정)
+        global_layout.setColumnStretch(1, 1)
+        global_layout.setColumnStretch(3, 1)
         
         self.global_group.setLayout(global_layout)
         left_layout.addWidget(self.global_group)
 
-        # 2. Tabs
-        self.tabs = QTabWidget()
+        # 2. Custom Tab Navigation (2-Story Layout)
+        # [New] 탭 대신 버튼 그리드를 사용하여 2층 구조 구현
+        nav_container = QWidget()
+        nav_layout = QGridLayout(nav_container)
+        # [Fix] 너비가 불필요하게 확장되지 않도록 설정
+        nav_container.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+
+        nav_layout.setContentsMargins(0, 0, 0, 0)
+        nav_layout.setSpacing(2)
+        
+        self.stack = QStackedWidget()
         self.unit_widgets = []
+        self.nav_buttons = QButtonGroup(self)
+        self.nav_buttons.setExclusive(True)
+        
         max_passes = cfg.get('system', 'max_passes') or 15
+        
         for i in range(1, max_passes + 1): 
+            # 버튼 생성
+            btn = QPushButton(f"패스 {i}")
+            btn.setCheckable(True)
+            btn.setMinimumHeight(30)
+            self.nav_buttons.addButton(btn, i - 1)
+            
+            # 2층 구조 배치 (1~8: 1층, 9~15: 2층)
+            row = 0 if i <= 8 else 1
+            col = (i - 1) % 8
+            nav_layout.addWidget(btn, row, col)
+            
+            # 페이지 생성
             tab = AdetailerUnitWidget(unit_name=f"패스 {i}")
             self.unit_widgets.append(tab)
-            self.tabs.addTab(tab, f"패스 {i}")
+            self.stack.addWidget(tab)
         
-        left_layout.addWidget(self.tabs)
-        left_panel.setMinimumWidth(550) # 최소 너비 확보
+        # 버튼 클릭 시 페이지 전환 연결
+        self.nav_buttons.idClicked.connect(self.stack.setCurrentIndex)
+        
+        # 첫 번째 탭 선택
+        if self.nav_buttons.button(0):
+            self.nav_buttons.button(0).setChecked(True)
+        
+        left_layout.addWidget(nav_container)
+        left_layout.addWidget(self.stack)
+        
+        left_panel.setMinimumWidth(400) # 최소 너비 확보 (40% 비율 유연성)
 
         # ============================================================
         # [Right Panel] Preview & Logs
@@ -184,8 +222,11 @@ class MainWindow(QMainWindow):
         # Add to Splitter
         self.splitter.addWidget(left_panel)
         self.splitter.addWidget(right_panel)
-        self.splitter.setStretchFactor(0, 1)
-        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setStretchFactor(0, 4)
+        self.splitter.setStretchFactor(1, 6)
+        
+        # [Fix] 초기 실행 시 40:60 비율 강제 적용 (2390px 기준 956:1434)
+        self.splitter.setSizes([956, 1434])
 
         # Progress Bar in Status Bar
         self.progress_bar = QProgressBar()
@@ -223,7 +264,7 @@ class MainWindow(QMainWindow):
 
     def save_current_tab_config(self):
         """현재 선택된 탭의 설정만 저장"""
-        current_idx = self.tabs.currentIndex()
+        current_idx = self.stack.currentIndex()
         if current_idx < 0: return
         
         tab = self.unit_widgets[current_idx]
@@ -281,7 +322,9 @@ class MainWindow(QMainWindow):
             QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox { 
                 background-color: #333; border: 1px solid #555; padding: 4px; border-radius: 3px; color: #eee;
             }
-            QPushButton { background-color: #0078d7; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; }
+            QPushButton { background-color: #444; color: white; border: 1px solid #555; padding: 6px; border-radius: 4px; }
+            QPushButton:checked { background-color: #0078d7; font-weight: bold; border: 1px solid #0056b3; }
+            QPushButton:hover:!checked { background-color: #555; }
             QRadioButton { spacing: 5px; color: #eeeeee; }
             QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 2px solid #666; background-color: #333; }
             QRadioButton::indicator:checked { background-color: #4dabf7; border-color: #4dabf7; }
@@ -290,6 +333,9 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(dark_style)
         self.log_text.setStyleSheet("background-color: #1e1e1e; color: #00ff00; border: 2px solid #c0392b; font-family: Consolas;")
         self.btn_stop.setStyleSheet("background-color: #c0392b; color: white;")
+        self.sub_view.set_theme("dark")
+        self.compare_view.set_theme("dark")
+        self.file_queue.set_theme("dark")
 
     def apply_light_theme(self):
         light_style = """
@@ -300,7 +346,9 @@ class MainWindow(QMainWindow):
             QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox { 
                 background-color: #ffffff; border: 1px solid #cccccc; padding: 4px; border-radius: 3px; color: #333;
             }
-            QPushButton { background-color: #0078d7; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; }
+            QPushButton { background-color: #f0f0f0; color: #333; border: 1px solid #ccc; padding: 6px; border-radius: 4px; }
+            QPushButton:checked { background-color: #0078d7; color: white; font-weight: bold; border: 1px solid #0056b3; }
+            QPushButton:hover:!checked { background-color: #e0e0e0; }
             QRadioButton { spacing: 5px; color: #333333; }
             QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 2px solid #999; background-color: #fff; }
             QRadioButton::indicator:checked { background-color: #0078d7; border-color: #0078d7; }
@@ -309,6 +357,9 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(light_style)
         self.log_text.setStyleSheet("background-color: #ffffff; color: #000000; border: 2px solid #c0392b; font-family: Consolas;")
         self.btn_stop.setStyleSheet("background-color: #d32f2f; color: white;")
+        self.sub_view.set_theme("light")
+        self.compare_view.set_theme("light")
+        self.file_queue.set_theme("light")
 
     def log(self, message):
         self.log_text.append(message)
@@ -356,7 +407,7 @@ class MainWindow(QMainWindow):
         """처리 중 UI 활성화/비활성화 제어"""
         self.btn_load.setEnabled(enabled)
         self.btn_run.setEnabled(enabled)
-        self.tabs.setEnabled(enabled)
+        self.stack.setEnabled(enabled)
         self.global_group.setEnabled(enabled)
         self.file_queue.setEnabled(enabled)
         

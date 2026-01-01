@@ -7,7 +7,9 @@ setlocal enabledelayedexpansion
 set "PROJECT_NAME=SAM3_FaceDetailer_Ultimate"
 set "VENV_DIR=venv"
 set "PYTHON_EXEC=python"
-set "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:128"
+set "PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128"
+:: [Dual GPU 최적화] 각 워커가 CPU 코어를 독점하지 않도록 제한 (병목 방지)
+set "OMP_NUM_THREADS=1"
 
 :: 콘솔 한글 깨짐 방지 (UTF-8)
 chcp 65001 > nul

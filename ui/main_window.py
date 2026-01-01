@@ -17,6 +17,7 @@ from core.config import config_instance as cfg
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        print(f"[DEBUG] MainWindow Init. Global Font PointSize: {self.font().pointSize()}")
         self.setWindowTitle("Standalone ADetailer - Dual GPU Edition")
         self.resize(1600, 1200) # 기본 사이즈
         

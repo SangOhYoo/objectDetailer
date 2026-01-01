@@ -168,9 +168,14 @@ class ComparisonViewer(QWidget):
         # 6. 텍스트 라벨
         painter.setPen(QColor(255, 255, 255))
         
-        font = painter.font() # 현재 위젯에 적용된 안전한 폰트 가져오기
-        font.setBold(True)    # 굵게만 설정
-        painter.setFont(font)
+        # [DEBUG] 폰트 설정 구간 진입 로그 (에러 발생 위치 추적)
+        print(f"[DEBUG] ComparisonViewer: Setting Font. Current PointSize={painter.font().pointSize()}")
+
+        # 스타일시트의 -1 pointSize 상속을 방지하기 위해 새로운 QFont 객체 생성
+        safe_font = QFont()
+        safe_font.setBold(True)
+        safe_font.setPixelSize(12)
+        painter.setFont(safe_font)
         
         def draw_text_with_shadow(x, y, text):
             painter.setPen(QColor(0, 0, 0))

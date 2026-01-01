@@ -185,9 +185,14 @@ class ImageProcessor:
                 control_args["control_guidance_end"] = float(config.get('guidance_end', 1.0))
 
         # [Fix] Long Prompt Support (Token Chunking)
-        prompt_embeds, neg_prompt_embeds = self._get_long_prompt_embeds(
-            self.model_manager.pipe, config['pos_prompt'], config['neg_prompt']
-        )
+        # SDXL은 2개의 텍스트 인코더를 사용하므로 기존 로직(SD1.5용)과 호환되지 않음.
+        # SDXL일 경우(tokenizer_2 존재) 수동 임베딩 생성을 건너뛰고 파이프라인에 맡김.
+        if hasattr(self.model_manager.pipe, "tokenizer_2"):
+            prompt_embeds, neg_prompt_embeds = None, None
+        else:
+            prompt_embeds, neg_prompt_embeds = self._get_long_prompt_embeds(
+                self.model_manager.pipe, config['pos_prompt'], config['neg_prompt']
+            )
 
         # Apply Scheduler & Seed
         self.model_manager.apply_scheduler(config.get('sampler_name', 'Euler a'))

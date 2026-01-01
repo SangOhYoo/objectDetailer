@@ -5,6 +5,7 @@ import torch
 import traceback
 import warnings
 from queue import Queue
+import gc
 from PyQt6.QtCore import QThread, pyqtSignal, QObject
 
 # [Fix] GFPGAN(BasicSR)과 torchvision 0.17+ 호환성 패치
@@ -77,6 +78,10 @@ class ProcessingController(QObject):
             worker.wait() # 스레드 종료 대기
         self.workers.clear()
         self.log_signal.emit("[System] Processing stopped.")
+        
+        # [Fix] 작업 중지 후 VRAM 정리
+        gc.collect()
+        torch.cuda.empty_cache()
 
     def handle_result(self, path, img):
         self.processed_count += 1
@@ -187,6 +192,15 @@ class GpuWorker(QThread):
                 self.result_signal.emit(fpath, None)
             finally:
                 self.queue.task_done()
+                # [Fix] 파일 하나 처리 후 메모리 정리 (연속 처리 시 OOM 방지 및 상태 초기화)
+                gc.collect()
+                torch.cuda.empty_cache()
+        
+        # [Fix] 워커 종료 시 VRAM 정리
+        if self.processor:
+            del self.processor
+        gc.collect()
+        torch.cuda.empty_cache()
         
         self.relay_log("Finished.")
         self.finished_signal.emit()

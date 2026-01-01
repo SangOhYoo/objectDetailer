@@ -3,6 +3,14 @@ import cv2
 import numpy as np
 import torch
 from ultralytics import YOLO
+import threading
+
+try:
+    from accelerate import no_dispatch
+except ImportError:
+    class no_dispatch:
+        def __enter__(self): pass
+        def __exit__(self, exc_type, exc_val, exc_tb): pass
 
 try:
     import mediapipe as mp
@@ -60,7 +68,16 @@ class ObjectDetector:
                 load_target = model_path
 
             print(f"[Detector] Loading YOLO: {load_target}")
-            self.yolo_models[model_name] = YOLO(load_target)
+            
+            # [Fix] Accelerate 'init_empty_weights' hook bypass using Thread
+            # Diffusers/Accelerate가 메인 스레드에 Meta Tensor Hook을 걸어두었을 가능성이 있으므로
+            # 별도 스레드에서 YOLO 모델을 로드하여 Hook을 회피합니다.
+            def _load_yolo():
+                self.yolo_models[model_name] = YOLO(load_target, task='detect')
+            
+            t = threading.Thread(target=_load_yolo)
+            t.start()
+            t.join()
 
         model = self.yolo_models[model_name]
         
@@ -73,7 +90,8 @@ class ObjectDetector:
                 pass
         
         try:
-            results = model.predict(image, conf=conf, device=device_arg, verbose=False)
+            with no_dispatch():
+                results = model.predict(image, conf=conf, device=device_arg, verbose=False)
         except (NotImplementedError, RuntimeError) as e:
             # [Fix] Meta tensor error handling (accelerate conflict)
             print(f"[Detector] Warning: Inference failed ({e}). Attempting CPU fallback for {model_name}.")
@@ -88,14 +106,22 @@ class ObjectDetector:
             
             # [Fix] Simply reload model from path to recover from Meta tensor error
             try:
-                model = YOLO(load_target)
+                # Threading fix for fallback as well
+                fallback_result = {}
+                def _reload_yolo():
+                    fallback_result['model'] = YOLO(load_target, task='detect')
+                t = threading.Thread(target=_reload_yolo)
+                t.start()
+                t.join()
+                model = fallback_result.get('model')
             except Exception as e:
                 print(f"[Detector] CPU Reload failed: {e}")
                 return []
 
             self.yolo_models[model_name] = model
             try:
-                results = model.predict(image, conf=conf, device='cpu', verbose=False)
+                with no_dispatch():
+                    results = model.predict(image, conf=conf, device='cpu', verbose=False)
             except Exception as e:
                 print(f"[Detector] CPU inference also failed (Skipping detection): {e}")
                 return []

@@ -17,6 +17,7 @@ def get_rotation_angle(kps):
     """
     # 왼쪽 눈(0)과 오른쪽 눈(1)
     l_eye = kps[0]
+    nose = kps[2]
     r_eye = kps[1]
     
     # 각도 계산 (Atan2)
@@ -24,6 +25,12 @@ def get_rotation_angle(kps):
     dx = r_eye[0] - l_eye[0]
     angle = math.degrees(math.atan2(dy, dx))
     return angle
+    
+    # [Fix] 180도 뒤집힌 얼굴 보정
+    # 코가 눈보다 위에 있으면, 180도 뒤집힌 것으로 간주
+    eye_center_y = (l_eye[1] + r_eye[1]) / 2
+    if nose[1] < eye_center_y:
+        angle += 180
 
 def rotate_point(pt, angle, center):
     """

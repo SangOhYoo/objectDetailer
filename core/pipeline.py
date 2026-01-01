@@ -112,6 +112,9 @@ class ImageProcessor:
                 traceback.print_exc()
             finally:
                 self.model_manager.manage_lora([], action="unload")
+                # [Fix] 패스 종료 시 메모리 정리
+                gc.collect()
+                torch.cuda.empty_cache()
                 
         return result_img
 
@@ -138,7 +141,7 @@ class ImageProcessor:
 
         # [New] Apply Max Detections Limit (정렬 후 상위 N개만 선택)
         max_det = config.get('max_det', 20)
-        if len(detections) > max_det:
+        if max_det > 0 and len(detections) > max_det:
             detections = detections[:max_det]
 
         # [New] Pre-calculate LoRAs for visualization (프리뷰용 LoRA 정보 미리 계산)

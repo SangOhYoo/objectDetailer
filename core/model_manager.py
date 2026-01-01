@@ -34,17 +34,20 @@ class ModelManager:
         if not vae_path:
             vae_path = cfg.get_path('vae', 'vae_file')
         
-        # ControlNet 경로 (인자가 없으면 config.yaml에서 로드)
-        # [Mod] ControlNet Tile 강제 사용 (설정 추론 에러 방지 및 안정성 확보)
-        if not controlnet_path and cfg.get_path('controlnet', 'controlnet_tile'):
-             controlnet_path = cfg.get_path('controlnet', 'controlnet_tile')
-
         # [New] SDXL 판별 (파일명 기반)
         is_sdxl = False
         if ckpt_path:
             fname = os.path.basename(ckpt_path).lower()
             if "xl" in fname or "pony" in fname:
                 is_sdxl = True
+
+        # ControlNet 경로 (인자가 없으면 config.yaml에서 로드)
+        # [Mod] ControlNet Tile 강제 사용 (설정 추론 에러 방지 및 안정성 확보)
+        if not controlnet_path and cfg.get_path('controlnet', 'controlnet_tile'):
+            if not is_sdxl:
+                controlnet_path = cfg.get_path('controlnet', 'controlnet_tile')
+            else:
+                print("[ModelManager] SDXL detected. Skipping default SD1.5 ControlNet Tile.")
 
         # 현재 로드된 설정과 비교
         new_config = {
@@ -140,7 +143,9 @@ class ModelManager:
                 self.pipe.enable_attention_slicing()
 
             # 3. VAE Tiling (고해상도 OOM 방지)
-            if hasattr(self.pipe, 'enable_vae_tiling'):
+            if hasattr(self.pipe.vae, 'enable_tiling'):
+                self.pipe.vae.enable_tiling()
+            elif hasattr(self.pipe, 'enable_vae_tiling'):
                 self.pipe.enable_vae_tiling()
 
             # 4. CPU Offload (VRAM 절약의 핵심)

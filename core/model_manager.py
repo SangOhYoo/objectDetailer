@@ -88,7 +88,9 @@ class ModelManager:
                 # [Fix] Load as standard InpaintPipeline first to avoid config resolution errors
                 self.pipe = StableDiffusionInpaintPipeline.from_single_file(ckpt_path, **load_args)
             except OSError as e:
-                print(f"[ModelManager] Warning: Failed to infer config ({e}). Retrying with default SD 1.5 Inpainting config...")
+                print(f"[ModelManager] Warning: Failed to infer config from checkpoint.")
+                print(f"               Error: {e}")
+                print(f"               -> This is a known Diffusers cache issue. Retrying with forced SD 1.5 config...")
                 # Fallback: Force use of standard SD 1.5 Inpainting config to bypass cache/inference issues
                 # Note: Using v1-5 config because the checkpoint might be a standard model (4 channels), not native inpainting (9 channels)
                 self.pipe = StableDiffusionInpaintPipeline.from_single_file(

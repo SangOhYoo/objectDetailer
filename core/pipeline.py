@@ -237,22 +237,41 @@ class ImageProcessor:
         if not tokenizer or not text_encoder:
             return None, None
 
-        def encode_text(text):
-            tokens = tokenizer(text, truncation=False, add_special_tokens=False).input_ids
-            max_len = tokenizer.model_max_length - 2
-            
-            if len(tokens) == 0: chunks = [[]]
-            else: chunks = [tokens[i:i + max_len] for i in range(0, len(tokens), max_len)]
-            
+        # 1. Tokenize
+        pos_tokens = tokenizer(prompt, truncation=False, add_special_tokens=False).input_ids
+        neg_tokens = tokenizer(negative_prompt, truncation=False, add_special_tokens=False).input_ids
+
+        # 2. Chunking
+        max_len = tokenizer.model_max_length - 2
+        
+        def chunk_tokens(tokens):
+            if len(tokens) == 0: return [[]]
+            return [tokens[i:i + max_len] for i in range(0, len(tokens), max_len)]
+
+        pos_chunks = chunk_tokens(pos_tokens)
+        neg_chunks = chunk_tokens(neg_tokens)
+
+        # 3. Pad chunks to match max length (Reforge style)
+        total_chunks = max(len(pos_chunks), len(neg_chunks))
+        
+        while len(pos_chunks) < total_chunks:
+            pos_chunks.append([])
+        while len(neg_chunks) < total_chunks:
+            neg_chunks.append([])
+
+        # 4. Encode
+        pad_token = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
+
+        def encode(chunks):
             embeds = []
-            pad_token = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
-            
             for chunk in chunks:
                 input_ids = [tokenizer.bos_token_id] + chunk + [tokenizer.eos_token_id]
-                input_ids += [pad_token] * (tokenizer.model_max_length - len(input_ids))
+                pad_len = tokenizer.model_max_length - len(input_ids)
+                if pad_len > 0:
+                    input_ids += [pad_token] * pad_len
+                
                 input_tensor = torch.tensor([input_ids], device=self.device)
                 embeds.append(text_encoder(input_tensor)[0])
-            
             return torch.cat(embeds, dim=1)
 
-        return encode_text(prompt), encode_text(negative_prompt)
+        return encode(pos_chunks), encode(neg_chunks)

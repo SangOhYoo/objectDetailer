@@ -26,7 +26,7 @@ ui_settings:
     detector_model: face_yolov8n_v2.pt
     use_sam: false
     auto_prompt_injection: true
-    gender_filter: All
+    gender_filter: Female
     ignore_edge_touching: false
     anatomy_check: true
     auto_rotate: true
@@ -39,10 +39,10 @@ ui_settings:
       (female orgasm:1.4), '
     neg_prompt: (worst quality, low quality, normal quality, lowres, bokeh, blur:2.0),
       (polydactyly, polydactylism:2.0)
-    max_det: 2
-    use_controlnet: true
-    control_model: control_v11p_sd15_inpaint.pth
-    control_module: inpaint_global_harmonious
+    max_det: 1
+    use_controlnet: false
+    control_model: None
+    control_module: None
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
@@ -58,9 +58,9 @@ ui_settings:
     steps: 20
     sep_cfg: false
     cfg_scale: 7.0
-    sep_clip: false
+    sep_clip: true
     clip_skip: 2
-    restore_face: false
+    restore_face: true
     conf_thresh: 0.35
     min_face_ratio: 0.01
     max_face_ratio: 1.0

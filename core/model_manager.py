@@ -32,10 +32,12 @@ class ModelManager:
             vae_path = cfg.get_path('vae', 'vae_file')
         
         # ControlNet 경로 (인자가 없으면 config.yaml에서 로드)
-        use_controlnet = controlnet_path is not None
-        if not controlnet_path and cfg.get_path('controlnet', 'controlnet_tile'):
-             # 기본값으로 Tile 모델 사용 (필요시)
-             pass 
+        # [Fix] ControlNet 경로 강제 설정 제거
+        # pipeline.py에서 use_controlnet=False일 때 None을 전달하는데,
+        # 여기서 강제로 기본값을 설정하면 의도치 않게 ControlNet 파이프라인이 로드되어
+        # control_image 누락 에러(TypeError)가 발생함.
+        # if not controlnet_path and cfg.get_path('controlnet', 'controlnet_tile'):
+        #      controlnet_path = cfg.get_path('controlnet', 'controlnet_tile')
 
         # 현재 로드된 설정과 비교
         new_config = {
@@ -55,8 +57,20 @@ class ModelManager:
             controlnet = None
             if controlnet_path:
                 cn_path = controlnet_path
-                if cn_path and os.path.exists(cn_path):
-                    controlnet = ControlNetModel.from_single_file(cn_path, torch_dtype=torch.float16)
+                if cn_path and os.path.exists(cn_path) and os.path.isfile(cn_path):
+                    try:
+                        controlnet = ControlNetModel.from_single_file(cn_path, torch_dtype=torch.float16)
+                    except Exception as e:
+                        print(f"[ModelManager] Failed to load ControlNet from {cn_path}: {e}")
+                else:
+                    try:
+                        target_path = cn_path
+                        if "lllyasviel/control_v11f1e_sd15_tile" in cn_path.replace("\\", "/"):
+                            target_path = "lllyasviel/control_v11f1e_sd15_tile"
+                        
+                        controlnet = ControlNetModel.from_pretrained(target_path, torch_dtype=torch.float16)
+                    except Exception as e:
+                        print(f"[ModelManager] Failed to load ControlNet (Pretrained) from {cn_path}: {e}")
 
             # VAE
             vae = None
@@ -67,16 +81,22 @@ class ModelManager:
             load_args = {"torch_dtype": torch.float32, "safety_checker": None, "use_safetensors": True}
             if vae: load_args["vae"] = vae
             
-            if controlnet:
-                PipelineClass = StableDiffusionControlNetInpaintPipeline
-                load_args["controlnet"] = controlnet
-            else:
-                PipelineClass = StableDiffusionInpaintPipeline
-
             if not os.path.exists(ckpt_path):
                 raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
 
-            self.pipe = PipelineClass.from_single_file(ckpt_path, **load_args)
+            try:
+                # [Fix] Load as standard InpaintPipeline first to avoid config resolution errors
+                self.pipe = StableDiffusionInpaintPipeline.from_single_file(ckpt_path, **load_args)
+            except OSError as e:
+                print(f"[ModelManager] Warning: Failed to infer config ({e}). Retrying with default SD 1.5 Inpainting config...")
+                # Fallback: Force use of standard SD 1.5 Inpainting config to bypass cache/inference issues
+                # Note: Using v1-5 config because the checkpoint might be a standard model (4 channels), not native inpainting (9 channels)
+                self.pipe = StableDiffusionInpaintPipeline.from_single_file(
+                    ckpt_path, config="runwayml/stable-diffusion-v1-5", **load_args
+                )
+            
+            if controlnet:
+                self.pipe = StableDiffusionControlNetInpaintPipeline(**self.pipe.components, controlnet=controlnet)
 
             # Clip Skip 적용
             if clip_skip > 1 and hasattr(self.pipe, 'text_encoder'):

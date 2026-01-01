@@ -19,6 +19,7 @@ class AdetailerUnitWidget(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        print(f"[DEBUG] AdetailerUnitWidget({self.unit_name}) init_ui started.")
         # 스크롤 영역 설정
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -77,6 +78,7 @@ class AdetailerUnitWidget(QWidget):
         layout_model.addWidget(self.combo_model, 2, 1, 1, 2)
         
         group_model.setLayout(layout_model)
+        group_model.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.layout.addWidget(group_model, 0, 0)
 
         # =================================================
@@ -88,7 +90,11 @@ class AdetailerUnitWidget(QWidget):
         
         self.combo_gender = QComboBox()
         self.combo_gender.addItems(["All (성별무관)", "Male", "Female"])
-        self.combo_gender.setCurrentText(self.saved_config.get('gender_filter', "All (성별무관)"))
+        saved_gender = self.saved_config.get('gender_filter', "All")
+        if saved_gender == "All":
+            self.combo_gender.setCurrentIndex(0)
+        else:
+            self.combo_gender.setCurrentText(saved_gender)
 
         self.chk_ignore_edge = QCheckBox("Edge 무시")
         self.chk_ignore_edge.setChecked(self.saved_config.get('ignore_edge_touching', False))
@@ -96,10 +102,13 @@ class AdetailerUnitWidget(QWidget):
         self.chk_anatomy = QCheckBox("해부학 검증")
         self.chk_anatomy.setChecked(self.saved_config.get('anatomy_check', True))
         
-        layout_detect.addWidget(QLabel("성별:"), 0, 0)
-        layout_detect.addWidget(self.combo_gender, 0, 1)
-        layout_detect.addWidget(self.chk_ignore_edge, 0, 2)
-        layout_detect.addWidget(self.chk_anatomy, 0, 3)
+        layout_top_detect = QHBoxLayout()
+        layout_top_detect.setContentsMargins(0, 0, 0, 0)
+        layout_top_detect.addWidget(QLabel("성별:"))
+        layout_top_detect.addWidget(self.combo_gender)
+        layout_top_detect.addWidget(self.chk_ignore_edge)
+        layout_top_detect.addWidget(self.chk_anatomy)
+        layout_detect.addLayout(layout_top_detect, 0, 0, 1, 3)
 
         self.add_slider_row(layout_detect, 1, "신뢰도(Conf):", "conf_thresh", 0.0, 1.0, 0.35, 0.01)
         # [복구] 최소 크기와 최대 크기를 나란히 배치
@@ -153,8 +162,12 @@ class AdetailerUnitWidget(QWidget):
         self.chk_noise_mask = QCheckBox("노이즈 마스크")
         self.chk_noise_mask.setChecked(self.saved_config.get('use_noise_mask', False))
         
+        self.chk_auto_rotate = QCheckBox("🔄 자동 회전 보정 (Auto Rotate)")
+        self.chk_auto_rotate.setChecked(self.saved_config.get('auto_rotate', True))
+        
         layout_inpaint.addWidget(self.chk_mask_merge, 4, 0)
         layout_inpaint.addWidget(self.chk_noise_mask, 4, 1)
+        layout_inpaint.addWidget(self.chk_auto_rotate, 5, 0, 1, 2)
 
         group_inpaint.setLayout(layout_inpaint)
         self.layout.addWidget(group_inpaint, 2, 0)
@@ -189,16 +202,21 @@ class AdetailerUnitWidget(QWidget):
         self.txt_pos.setPlaceholderText("Positive Prompt (e.g. detailed face, high quality)")
         self.txt_pos.setText(self.saved_config.get('pos_prompt', ""))
         self.txt_pos.setMaximumHeight(50)
+        # 50:50 비율 유지를 위해 Expanding 방지
+        self.txt_pos.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         
         self.txt_neg = QTextEdit()
         self.txt_neg.setPlaceholderText("Negative Prompt (e.g. low quality, blurry)")
         self.txt_neg.setText(self.saved_config.get('neg_prompt', ""))
         self.txt_neg.setMaximumHeight(40)
+        # 50:50 비율 유지를 위해 Expanding 방지
+        self.txt_neg.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         
         layout_prompt.addWidget(self.chk_auto_prompt)
         layout_prompt.addWidget(self.txt_pos)
         layout_prompt.addWidget(self.txt_neg)
         group_prompt.setLayout(layout_prompt)
+        group_prompt.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.layout.addWidget(group_prompt, 0, 1)
 
         # =================================================
@@ -208,10 +226,6 @@ class AdetailerUnitWidget(QWidget):
         layout_mask = QGridLayout()
         layout_mask.setContentsMargins(5, 8, 5, 5)
         
-        self.chk_auto_rotate = QCheckBox("🔄 자동 회전 보정 (Auto Rotate)")
-        self.chk_auto_rotate.setChecked(self.saved_config.get('auto_rotate', True))
-        layout_mask.addWidget(self.chk_auto_rotate, 0, 0, 1, 3)
-
         self.add_slider_row(layout_mask, 1, "확장(Dilation):", "mask_dilation", -64, 64, 4, 1)
         self.add_slider_row(layout_mask, 2, "침식(Erosion):", "mask_erosion", 0, 64, 0, 1)
         self.add_slider_row(layout_mask, 3, "블러(Blur):", "mask_blur", 0, 64, 12, 1)
@@ -308,6 +322,19 @@ class AdetailerUnitWidget(QWidget):
         self.combo_sep_sampler.addItems(["Euler a", "DPM++ 2M", "DPM++ SDE", "DDIM"])
         self.combo_sep_scheduler = QComboBox()
         self.combo_sep_scheduler.addItems(["Karras", "Exponential", "Automatic"])
+        
+        # Sampler/Scheduler 복원
+        saved_sampler_full = self.saved_config.get('sampler_name', "Euler a Automatic")
+        schedulers = ["Karras", "Exponential", "Automatic"]
+        found_scheduler = "Automatic"
+        found_sampler = saved_sampler_full
+        for sch in schedulers:
+            if saved_sampler_full.endswith(sch):
+                found_scheduler = sch
+                found_sampler = saved_sampler_full.replace(sch, "").strip()
+                break
+        self.combo_sep_sampler.setCurrentText(found_sampler)
+        self.combo_sep_scheduler.setCurrentText(found_scheduler)
 
         self.chk_sep_steps = QCheckBox("Steps")
         self.chk_sep_steps.setChecked(self.saved_config.get('sep_steps', False))

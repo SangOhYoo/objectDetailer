@@ -14,7 +14,7 @@ files:
   sam_file: sam3.pt
   sam_config: eval_base.yaml
   vae_file: vae-ft-mse-840000-ema-pruned.ckpt.vae.pt
-  controlnet_tile: control_v11f1e_sd15_tile.pth
+  controlnet_tile: lllyasviel/control_v11f1e_sd15_tile
 defaults:
   resolution: 512
   padding: 1.5
@@ -23,32 +23,38 @@ defaults:
 ui_settings:
   패스 1:
     enabled: true
-    detector_model: adetailerAfterDetailer_v10.pt
+    detector_model: face_yolov8n_v2.pt
     use_sam: false
     auto_prompt_injection: true
     gender_filter: All
     ignore_edge_touching: false
     anatomy_check: true
     auto_rotate: true
-    color_fix: None
+    color_fix: Wavelet
     use_hires_fix: true
-    pos_prompt: ''
-    neg_prompt: ''
-    max_det: 20
-    use_controlnet: false
-    control_model: None
+    pos_prompt: '(masterpiece), (best quality), (high resolution), (photorealistic),
+      [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>], pale skin, (glossy skin:1.1),
+      looking at another, (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed,
+      aroused, moaning, ecstacy:1.6), (shocked:1.2), (closed eyes:1.2), (open mouth:1.4),
+      (female orgasm:1.4), '
+    neg_prompt: (worst quality, low quality, normal quality, lowres, bokeh, blur:2.0),
+      (polydactyly, polydactylism:2.0)
+    max_det: 2
+    use_controlnet: true
+    control_model: control_v11p_sd15_inpaint.pth
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
-    sep_ckpt: false
-    sep_ckpt_name: Use Global
-    sep_vae: false
-    sep_vae_name: Use Global
-    sep_sampler: false
-    sampler_name: Euler a Karras
-    sep_steps: false
+    mask_merge_mode: false
+    sep_ckpt: true
+    sep_ckpt_name: henmix_real_v6b-fp16-no-ema.safetensors
+    sep_vae: true
+    sep_vae_name: vae-ft-mse-840000-ema-pruned.ckpt.vae.pt
+    sep_sampler: true
+    sampler_name: DPM++ 2M Karras
+    sep_steps: true
     steps: 20
     sep_cfg: false
     cfg_scale: 7.0
@@ -57,8 +63,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -69,9 +79,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 2:
     enabled: false
@@ -89,17 +96,18 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: true
     sep_ckpt_name: henmix_real_v6b-fp16-no-ema.safetensors
     sep_vae: false
     sep_vae_name: Use Global
     sep_sampler: true
-    sampler_name: DPM++ 2M Karras
+    sampler_name: Euler a Karras
     sep_steps: true
     steps: 24
     sep_cfg: true
@@ -109,8 +117,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -121,9 +133,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 3:
     enabled: false
@@ -141,11 +150,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -161,8 +171,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -173,9 +187,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 4:
     enabled: false
@@ -193,11 +204,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -213,8 +225,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -225,9 +241,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 5:
     enabled: false
@@ -245,11 +258,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -265,8 +279,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -277,9 +295,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 6:
     enabled: false
@@ -297,11 +312,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -317,8 +333,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -329,9 +349,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 7:
     enabled: false
@@ -349,11 +366,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -369,8 +387,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -381,9 +403,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 8:
     enabled: false
@@ -401,11 +420,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -421,8 +441,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -433,9 +457,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 9:
     enabled: false
@@ -453,11 +474,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -473,8 +495,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -485,9 +511,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 10:
     enabled: true
@@ -505,11 +528,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -525,8 +549,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -537,9 +565,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 11:
     enabled: true
@@ -557,11 +582,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -577,8 +603,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -589,9 +619,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 12:
     enabled: true
@@ -609,11 +636,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -629,8 +657,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -641,9 +673,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 13:
     enabled: true
@@ -661,11 +690,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -681,8 +711,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -693,9 +727,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 14:
     enabled: true
@@ -713,11 +744,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -733,8 +765,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -745,9 +781,6 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1
   패스 15:
     enabled: true
@@ -765,11 +798,12 @@ ui_settings:
     max_det: 20
     use_controlnet: false
     control_model: None
+    control_module: inpaint_global_harmonious
     sep_noise: false
     inpaint_width: 0
     inpaint_height: 0
     use_noise_mask: false
-    force_inpaint: false
+    mask_merge_mode: false
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -785,8 +819,12 @@ ui_settings:
     restore_face: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
+    max_face_ratio: 1.0
     denoising_strength: 0.4
     crop_padding: 32
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
@@ -797,7 +835,4 @@ ui_settings:
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     seed: -1

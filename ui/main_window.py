@@ -17,7 +17,7 @@ from core.config import config_instance as cfg
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        print(f"[DEBUG] MainWindow Init. Global Font PointSize: {self.font().pointSize()}")
+        print(f"[DEBUG] MainWindow initialized. Global Font: point={self.font().pointSize()}, pixel={self.font().pixelSize()}")
         self.setWindowTitle("Standalone ADetailer - Dual GPU Edition")
         self.resize(1600, 1200) # 기본 사이즈
         
@@ -27,6 +27,7 @@ class MainWindow(QMainWindow):
         self.apply_light_theme() # 기본 테마
 
     def init_ui(self):
+        print("[DEBUG] MainWindow.init_ui() started.")
         # ============================================================
         # [Menu Bar] 파일 메뉴 & 테마 메뉴
         # ============================================================
@@ -169,8 +170,8 @@ class MainWindow(QMainWindow):
         # Add to Splitter
         self.splitter.addWidget(left_panel)
         self.splitter.addWidget(right_panel)
-        self.splitter.setStretchFactor(0, 4)
-        self.splitter.setStretchFactor(1, 6)
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 1)
 
         self.statusBar().showMessage("[System] Initialized. Ready.")
 
@@ -208,8 +209,9 @@ class MainWindow(QMainWindow):
 
     # --- Theme & Basics ---
     def apply_dark_theme(self):
+        print("[DEBUG] Applying Dark Theme...")
         dark_style = """
-            QMainWindow, QWidget { background-color: #2b2b2b; color: #eeeeee; font-size: 13px; }
+            QMainWindow, QWidget { background-color: #2b2b2b; color: #eeeeee; font-size: 10pt; }
             QSplitter::handle { background-color: #444; width: 4px; }
             QGroupBox { border: 1px solid #555; margin-top: 15px; border-radius: 4px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #4dabf7; font-weight: bold; }
@@ -217,14 +219,20 @@ class MainWindow(QMainWindow):
                 background-color: #333; border: 1px solid #555; padding: 4px; border-radius: 3px; color: #eee;
             }
             QPushButton { background-color: #0078d7; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; }
+            QRadioButton { spacing: 5px; color: #eeeeee; }
+            QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 2px solid #666; background-color: #333; }
+            QRadioButton::indicator:checked { background-color: #4dabf7; border-color: #4dabf7; }
+            QRadioButton::indicator:unchecked:hover { border-color: #888; }
         """
         self.setStyleSheet(dark_style)
         self.log_text.setStyleSheet("background-color: #1e1e1e; color: #00ff00; border: 2px solid #c0392b; font-family: Consolas;")
         self.btn_stop.setStyleSheet("background-color: #c0392b; color: white;")
+        print(f"[DEBUG] Dark Theme Applied. Window Font: point={self.font().pointSize()}, pixel={self.font().pixelSize()}")
 
     def apply_light_theme(self):
+        print("[DEBUG] Applying Light Theme...")
         light_style = """
-            QMainWindow, QWidget { background-color: #f5f5f5; color: #333333; font-size: 13px; }
+            QMainWindow, QWidget { background-color: #f5f5f5; color: #333333; font-size: 10pt; }
             QSplitter::handle { background-color: #ccc; width: 4px; }
             QGroupBox { border: 1px solid #cccccc; margin-top: 15px; border-radius: 4px; background-color: #ffffff; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #0056b3; font-weight: bold; }
@@ -232,10 +240,15 @@ class MainWindow(QMainWindow):
                 background-color: #ffffff; border: 1px solid #cccccc; padding: 4px; border-radius: 3px; color: #333;
             }
             QPushButton { background-color: #0078d7; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; }
+            QRadioButton { spacing: 5px; color: #333333; }
+            QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 2px solid #999; background-color: #fff; }
+            QRadioButton::indicator:checked { background-color: #0078d7; border-color: #0078d7; }
+            QRadioButton::indicator:unchecked:hover { border-color: #555; }
         """
         self.setStyleSheet(light_style)
         self.log_text.setStyleSheet("background-color: #ffffff; color: #000000; border: 2px solid #c0392b; font-family: Consolas;")
         self.btn_stop.setStyleSheet("background-color: #d32f2f; color: white;")
+        print(f"[DEBUG] Light Theme Applied. Window Font: point={self.font().pointSize()}, pixel={self.font().pixelSize()}")
 
     def log(self, message):
         self.log_text.append(message)

@@ -1,3 +1,4 @@
+import os
 import cv2
 import numpy as np
 import torch
@@ -31,7 +32,7 @@ class ImageProcessor:
         for i, config in enumerate(configs):
             if not config['enabled']: continue
             
-            self.log(f"  > Processing Unit {i+1} ({config['model']})...")
+            self.log(f"  > Processing Unit {i+1} ({config['detector_model']})...")
             
             # 모델 로딩 위임
             # 1. 체크포인트/VAE 경로 결정
@@ -45,8 +46,8 @@ class ImageProcessor:
 
             # 2. ControlNet 경로 결정
             cn_path = None
-            if config.get('use_controlnet') and config.get('cn_model') != "None":
-                cn_path = os.path.join(cfg.get_path('controlnet'), config['cn_model'])
+            if config.get('use_controlnet') and config.get('control_model') != "None":
+                cn_path = os.path.join(cfg.get_path('controlnet'), config['control_model'])
 
             clip_skip = int(config.get('clip_skip', 1)) if config.get('sep_clip') else 1
 
@@ -64,7 +65,7 @@ class ImageProcessor:
         h, w = image.shape[:2]
         img_area = h * w
         
-        detections = self.detector.detect(image, config['model'], config['conf'])
+        detections = self.detector.detect(image, config['detector_model'], config['conf_thresh'])
         if not detections: return image
 
         detections.sort(key=lambda d: (d['box'][2]-d['box'][0]) * (d['box'][3]-d['box'][1]), reverse=True)
@@ -82,7 +83,7 @@ class ImageProcessor:
             x1, y1, x2, y2 = box
             
             # Area Filtering
-            if (box[2]-x1)*(y2-y1)/img_area < config['min_area'] or (box[2]-x1)*(y2-y1)/img_area > config['max_area']:
+            if (box[2]-x1)*(y2-y1)/img_area < config['min_face_ratio'] or (box[2]-x1)*(y2-y1)/img_area > config['max_face_ratio']:
                 continue
 
             # Masking
@@ -95,12 +96,12 @@ class ImageProcessor:
 
             # Mask Refine
             mask = MaskUtils.shift_mask(mask, config.get('x_offset', 0), config.get('y_offset', 0))
-            mask = MaskUtils.refine_mask(mask, dilation=config['dilation'], blur=config['blur'])
-            if config.get('merge_mode') == "Merge and Invert":
-                mask = cv2.bitwise_not(mask)
+            mask = MaskUtils.refine_mask(mask, dilation=config['mask_dilation'], blur=config['mask_blur'])
+            # if config.get('merge_mode') == "Merge and Invert":
+            #     mask = cv2.bitwise_not(mask)
             
             # Dynamic Denoise
-            denoise = self._calc_dynamic_denoise(box, (h, w), config['denoise'])
+            denoise = self._calc_dynamic_denoise(box, (h, w), config['denoising_strength'])
             
             # Inpaint
             final_img = self._run_inpaint(final_img, mask, config, denoise)
@@ -108,7 +109,7 @@ class ImageProcessor:
         return final_img
 
     def _run_inpaint(self, image, mask, config, strength):
-        padding = config['padding']
+        padding = config['crop_padding']
         crop_img, (x1, y1, x2, y2) = MaskUtils.crop_image_by_mask(image, mask, context_padding=padding)
         crop_mask = mask[y1:y2, x1:x2]
         
@@ -136,8 +137,8 @@ class ImageProcessor:
 
         # ControlNet
         control_args = {}
-        if config['use_controlnet']:
-            cn_model = config.get('cn_model', '').lower()
+        if config['use_controlnet'] and hasattr(self.model_manager.pipe, "controlnet"):
+            cn_model = config.get('control_model', '').lower()
             
             if 'tile' in cn_model:
                 # Tile 모델은 원본 이미지를 그대로 사용 (혹은 블러)
@@ -160,12 +161,12 @@ class ImageProcessor:
                 canny = np.stack([canny] * 3, axis=-1)
                 control_args["control_image"] = Image.fromarray(canny)
             
-            control_args["controlnet_conditioning_scale"] = float(config['cn_weight'])
-            control_args["control_guidance_start"] = float(config.get('cn_start', 0.0))
-            control_args["control_guidance_end"] = float(config.get('cn_end', 1.0))
+            control_args["controlnet_conditioning_scale"] = float(config['control_weight'])
+            control_args["control_guidance_start"] = float(config.get('guidance_start', 0.0))
+            control_args["control_guidance_end"] = float(config.get('guidance_end', 1.0))
 
         # Apply Scheduler & Seed
-        self.model_manager.apply_scheduler(config.get('sampler', 'Euler a'))
+        self.model_manager.apply_scheduler(config.get('sampler_name', 'Euler a'))
         seed = config.get('seed', -1)
         generator = torch.Generator(self.device)
         if seed != -1: generator.manual_seed(seed)

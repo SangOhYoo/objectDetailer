@@ -124,13 +124,26 @@ class ComparisonViewer(QWidget):
         return QPixmap.fromImage(qimg.copy())
 
     def paintEvent(self, event):
+        # [DEBUG] 페인트 이벤트 시작 시점의 위젯 폰트 상태 확인
+        print(f"[DEBUG] ComparisonViewer.paintEvent | Widget Font: point={self.font().pointSize()}")
+        # [DEBUG] 페인트 이벤트 시작 시점의 위젯 폰트 상태 확인
+        # print(f"[DEBUG] ComparisonViewer.paintEvent | Widget Font: point={self.font().pointSize()}, pixel={self.font().pixelSize()}")
+        
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # [FIX] 스타일시트(px)로 인한 pointSize -1 경고 방지
+        # Painter 초기화 직후 안전한 폰트로 교체하여 모든 drawText 호출 시 에러 예방
+        safe_font = QFont("Arial", 9)
+        painter.setFont(safe_font)
+        print(f"[DEBUG] Painter Font Set to Arial 9 | Current PointSize: {painter.font().pointSize()}")
+        # print(f"[DEBUG] Painter Font Set to Arial 9 | Current PointSize: {painter.font().pointSize()}")
         
         w = self.width()
         h = self.height()
         
         if not self.pixmap_before or not self.pixmap_after:
+            # print("[DEBUG] No images to draw. Drawing placeholder text.")
             painter.setPen(Qt.GlobalColor.white)
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "이미지 없음 (Before / After)")
             return
@@ -168,14 +181,11 @@ class ComparisonViewer(QWidget):
         # 6. 텍스트 라벨
         painter.setPen(QColor(255, 255, 255))
         
-        # [DEBUG] 폰트 설정 구간 진입 로그 (에러 발생 위치 추적)
-        print(f"[DEBUG] ComparisonViewer: Setting Font. Current PointSize={painter.font().pointSize()}")
-
-        # 스타일시트의 -1 pointSize 상속을 방지하기 위해 새로운 QFont 객체 생성
-        safe_font = QFont()
-        safe_font.setBold(True)
-        safe_font.setPixelSize(12)
-        painter.setFont(safe_font)
+        print("[DEBUG] Setting bold font for labels.")
+        # print("[DEBUG] Setting bold font for labels.")
+        font = painter.font()
+        font.setBold(True)
+        painter.setFont(font)
         
         def draw_text_with_shadow(x, y, text):
             painter.setPen(QColor(0, 0, 0))

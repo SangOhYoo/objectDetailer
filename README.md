@@ -74,3 +74,63 @@ Simply run the `run.bat` file.
 ### Manual Start
 ```bash
 python main.py# objectDetailer
+
+### Workflow
+
+1. **Load Image**: Drag and drop an image or use the "Open" button.
+2. **Configuration**:
+* Select the **Detection Model** (e.g., face_yolo, person_yolo).
+* Input your **Prompt** (e.g., "highly detailed face, beautiful eyes").
+* Adjust **Denoising Strength** and **Inpaint Settings**.
+
+
+3. **Process**: Click the **"Run"** button.
+4. **Save**: The processed image will be displayed and can be saved to your local drive.
+
+---
+
+## 📂 Project Structure (프로젝트 구조)
+
+```
+ObjectDetailer/
+├── core/               # Core logic (Backend)
+│   ├── detector.py     # Object detection logic (YOLO/MediaPipe)
+│   ├── sam_wrapper.py  # Segment Anything Model wrapper
+│   ├── sd_engine.py    # Stable Diffusion inference engine
+│   └── pipeline.py     # Main processing pipeline
+├── ui/                 # User Interface (Frontend)
+│   ├── main_window.py  # Main GUI implementation
+│   └── components.py   # UI widgets
+├── configs/            # Configuration files (Model presets, Datasets)
+├── main.py             # Application entry point
+├── requirements.txt    # Python dependencies
+└── download_models.py  # Model downloader script
+
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+버그 제보나 기능 개선 요청은 언제나 환영합니다. Pull Request를 통해 기여해 주세요.
+
+## 📄 License
+
+This project is licensed under the MIT License.
+이 프로젝트는 MIT 라이선스를 따릅니다.
+
+```
+
+---
+
+### 💡 추가 제안 사항 (Next Steps)
+
+1.  **`requirements.txt` 버전 고정**: 다른 사용자가 설치할 때 충돌이 없도록 `torch`, `diffusers`, `ultralytics` 등의 라이브러리 버전을 명시하는 것이 좋습니다.
+2.  **스크린샷 추가**: `2026-01-01 08 39 00.png` 파일을 `assets` 폴더 등을 만들어 넣고, README 상단에 데모 이미지로 삽입하면 프로젝트 이해도가 훨씬 높아집니다.
+    * 예: `![Demo Image](assets/2026-01-01 08 39 00.png)`
+3.  **Config 문서화**: `configs/` 폴더 안의 YAML 파일들을 사용자가 어떻게 수정하여 커스텀할 수 있는지에 대한 가이드(Wiki 등)가 있으면 더 좋습니다.
+
+이 문서를 바로 `README.md`에 복사해서 사용하시면 됩니다! 더 수정이 필요한 부분이 있다면 알려주세요.
+
+```

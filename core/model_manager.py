@@ -79,8 +79,10 @@ class ModelManager:
                         target_path = cn_path
                         if "lllyasviel/control_v11f1e_sd15_tile" in cn_path.replace("\\", "/"):
                             target_path = "lllyasviel/control_v11f1e_sd15_tile"
-                        
-                        controlnet = ControlNetModel.from_pretrained(target_path, torch_dtype=torch.float32)
+                            # [Fix] 이 모델은 safetensors가 없으므로 명시적으로 비활성화하여 에러 로그 방지
+                            controlnet = ControlNetModel.from_pretrained(target_path, torch_dtype=torch.float32, use_safetensors=False)
+                        else:
+                            controlnet = ControlNetModel.from_pretrained(target_path, torch_dtype=torch.float32)
                     except Exception as e:
                         print(f"[ModelManager] Failed to load ControlNet (Pretrained) from {cn_path}: {e}")
 
@@ -110,9 +112,8 @@ class ModelManager:
                 try:
                     self.pipe = StableDiffusionInpaintPipeline.from_single_file(ckpt_path, **load_args)
                 except OSError as e:
-                    print(f"[ModelManager] Warning: Failed to infer config from checkpoint.")
-                    print(f"               Error: {e}")
-                    print(f"               -> This is a known Diffusers cache issue. Retrying with forced SD 1.5 config...")
+                    # [Mod] 사용자에게 불필요한 공포를 주는 에러 로그 간소화
+                    print(f"[ModelManager] Auto-config failed. Falling back to standard SD 1.5 config.")
                     self.pipe = StableDiffusionInpaintPipeline.from_single_file(
                         ckpt_path, config="runwayml/stable-diffusion-v1-5", **load_args
                     )
@@ -179,7 +180,11 @@ class ModelManager:
                     if os.path.exists(lora_path):
                         # 여러 LoRA를 동시에 로드하기 위해 고유 adapter_name 사용
                         adapter_name = f"lora_{i}"
-                        self.pipe.load_lora_weights(lora_path, adapter_name=adapter_name)
+                        try:
+                            self.pipe.load_lora_weights(lora_path, adapter_name=adapter_name)
+                        except RuntimeError as e:
+                            print(f"[ModelManager] Warning: Failed to load LoRA '{name}' (Meta tensor conflict). Skipping.")
+                            continue
                         adapter_names.append(adapter_name)
                         adapter_weights.append(scale)
                         print(f"[ModelManager] LoRA Loaded: {name} (Scale: {scale})")

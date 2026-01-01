@@ -24,7 +24,7 @@ defaults:
 ui_settings:
   패스 1:
     enabled: true
-    detector_model: face_yolov8n_v2.pt
+    detector_model: Anzhc Face seg 1024 v2 y8n.pt
     use_sam: false
     auto_prompt_injection: true
     gender_filter: Female
@@ -517,7 +517,7 @@ ui_settings:
     noise_multiplier: 1.0
     seed: -1
   패스 10:
-    enabled: true
+    enabled: false
     detector_model: adetailerAfterDetailer_v10.pt
     use_sam: false
     auto_prompt_injection: true
@@ -571,7 +571,7 @@ ui_settings:
     noise_multiplier: 1.0
     seed: -1
   패스 11:
-    enabled: true
+    enabled: false
     detector_model: adetailerAfterDetailer_v10.pt
     use_sam: false
     auto_prompt_injection: true
@@ -625,7 +625,7 @@ ui_settings:
     noise_multiplier: 1.0
     seed: -1
   패스 12:
-    enabled: true
+    enabled: false
     detector_model: adetailerAfterDetailer_v10.pt
     use_sam: false
     auto_prompt_injection: true
@@ -679,7 +679,7 @@ ui_settings:
     noise_multiplier: 1.0
     seed: -1
   패스 13:
-    enabled: true
+    enabled: false
     detector_model: adetailerAfterDetailer_v10.pt
     use_sam: false
     auto_prompt_injection: true
@@ -733,7 +733,7 @@ ui_settings:
     noise_multiplier: 1.0
     seed: -1
   패스 14:
-    enabled: true
+    enabled: false
     detector_model: adetailerAfterDetailer_v10.pt
     use_sam: false
     auto_prompt_injection: true
@@ -787,7 +787,7 @@ ui_settings:
     noise_multiplier: 1.0
     seed: -1
   패스 15:
-    enabled: true
+    enabled: false
     detector_model: adetailerAfterDetailer_v10.pt
     use_sam: false
     auto_prompt_injection: true

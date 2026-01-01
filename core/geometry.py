@@ -25,17 +25,34 @@ def get_rotation_angle(kps):
     angle = math.degrees(math.atan2(dy, dx))
     return angle
 
+def rotate_point(pt, angle, center):
+    """
+    점 pt를 center 중심으로 angle(도)만큼 회전
+    """
+    angle_rad = math.radians(angle)
+    ox, oy = center
+    px, py = pt
+
+    qx = ox + math.cos(angle_rad) * (px - ox) - math.sin(angle_rad) * (py - oy)
+    qy = oy + math.sin(angle_rad) * (px - ox) + math.cos(angle_rad) * (py - oy)
+    return [qx, qy]
+
 def is_anatomically_correct(kps):
     """
     [해부학 검증] 눈, 코, 입의 상대적 위치가 올바른지 확인 (괴물 얼굴 필터링)
-    회전 보정(Align)이 선행된 좌표계에서 판단해야 정확함.
+    입력된 kps가 회전되어 있을 수 있으므로, 눈의 각도를 계산하여 정자세로 보정한 후 검증함.
     """
-    if kps is None: return False
+    if kps is None or len(kps) < 5: return False
     
-    # Y좌표 기준: 눈 < 코 < 입 (이미지 좌표계는 아래로 갈수록 값이 큼)
-    l_eye_y, r_eye_y = kps[0][1], kps[1][1]
-    nose_y = kps[2][1]
-    mouth_y = (kps[3][1] + kps[4][1]) / 2 # 입 중앙
+    # 1. 회전 각도 계산 및 가상 회전 (정자세로 변환)
+    angle = get_rotation_angle(kps)
+    center = kps[2] # 코(Nose)를 중심으로 회전
+    rotated_kps = [rotate_point(p, -angle, center) for p in kps]
+    
+    # 2. Y좌표 검증 (정자세 기준: 눈 < 코 < 입)
+    l_eye_y, r_eye_y = rotated_kps[0][1], rotated_kps[1][1]
+    nose_y = rotated_kps[2][1]
+    mouth_y = (rotated_kps[3][1] + rotated_kps[4][1]) / 2
     
     eyes_center_y = (l_eye_y + r_eye_y) / 2
     
@@ -46,7 +63,7 @@ def is_anatomically_correct(kps):
     
     return check1 and check2
 
-def align_and_crop(image, bbox, kps=None, target_size=512, padding=0.25, force_rotate=False):
+def align_and_crop(image, bbox, kps=None, target_size=512, padding=0.25, force_rotate=False, borderMode=cv2.BORDER_REFLECT):
     """
     얼굴을 잘라내고, 필요시 회전하여 정자세(0도)로 만듭니다.
     반환값: cropped_img, M (변환행렬)
@@ -71,7 +88,7 @@ def align_and_crop(image, bbox, kps=None, target_size=512, padding=0.25, force_r
     M[1, 2] += (target_size / 2) - cy
     
     # 워핑 실행
-    aligned = cv2.warpAffine(image, M, (target_size, target_size), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+    aligned = cv2.warpAffine(image, M, (target_size, target_size), flags=cv2.INTER_LINEAR, borderMode=borderMode)
     
     return aligned, M
 

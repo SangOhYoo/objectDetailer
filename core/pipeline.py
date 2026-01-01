@@ -11,6 +11,8 @@ from core.sam_wrapper import SamInference
 from core.config import config_instance as cfg
 from core.model_manager import ModelManager
 from core.face_restorer import FaceRestorer
+from core.visualizer import draw_detections
+from core.geometry import align_and_crop, restore_and_paste, is_anatomically_correct
 
 class ImageProcessor:
     def __init__(self, device, log_callback=None, preview_callback=None):
@@ -81,6 +83,11 @@ class ImageProcessor:
         detections = self.detector.detect(image, config['detector_model'], config['conf_thresh'])
         if not detections: return image
 
+        # [New] 탐지된 영역(박스+마스크+점수) 시각화 및 프리뷰 전송
+        if self.preview_callback:
+            vis_img = draw_detections(image, detections)
+            self.preview_callback(vis_img)
+
         detections.sort(key=lambda d: (d['box'][2]-d['box'][0]) * (d['box'][3]-d['box'][1]), reverse=True)
 
         if config['use_sam']:
@@ -99,6 +106,14 @@ class ImageProcessor:
             if (box[2]-x1)*(y2-y1)/img_area < config['min_face_ratio'] or (box[2]-x1)*(y2-y1)/img_area > config['max_face_ratio']:
                 continue
 
+            # [New] Gender Filter (성별 필터)
+            target_gender = config.get('gender_filter', 'All')
+            if target_gender != 'All':
+                detected_gender = self.detector.analyze_gender(image, box)
+                if detected_gender and detected_gender != target_gender:
+                    self.log(f"  Skipping detection: Gender mismatch ({detected_gender} != {target_gender})")
+                    continue
+
             # Masking
             if config['use_sam'] and self.sam:
                 mask = self.sam.predict_mask_from_box(box)
@@ -115,35 +130,47 @@ class ImageProcessor:
             
             # Dynamic Denoise
             denoise = self._calc_dynamic_denoise(box, (h, w), config['denoising_strength'])
+
+            # [New] Landmarks for Rotation/Anatomy
+            kps = None
+            if config.get('auto_rotate') or config.get('anatomy_check'):
+                kps = self.detector.get_face_landmarks(image, box)
+
+            if config.get('anatomy_check') and kps:
+                if not is_anatomically_correct(kps):
+                    self.log(f"  Skipping detection: Anatomically incorrect.")
+                    continue
             
             # Inpaint
-            final_img = self._run_inpaint(final_img, mask, config, denoise)
+            final_img = self._run_inpaint(final_img, mask, config, denoise, box, kps)
+
+            # [New] 얼굴 하나 처리될 때마다 프리뷰 갱신 (실시간 피드백)
+            if self.preview_callback:
+                self.preview_callback(final_img)
 
         return final_img
 
-    def _run_inpaint(self, image, mask, config, strength):
-        padding = config['crop_padding']
-        crop_img, (x1, y1, x2, y2) = MaskUtils.crop_image_by_mask(image, mask, context_padding=padding)
-        crop_mask = mask[y1:y2, x1:x2]
+    def _run_inpaint(self, image, mask, config, strength, box, kps):
+        # [Fix] Use Geometry Module for Alignment & Rotation
+        padding_px = config['crop_padding']
         
-        if crop_img.size == 0: return image
-
-        # Upscale Logic (High-Res Fix)
-        h_orig, w_orig = crop_img.shape[:2]
-        target_res = 512
+        # Convert pixel padding to ratio for align_and_crop
+        w_box, h_box = box[2] - box[0], box[3] - box[1]
+        padding_ratio = (padding_px * 2) / max(w_box, h_box) if max(w_box, h_box) > 0 else 0.25
         
-        if max(h_orig, w_orig) < target_res:
-            scale = target_res / max(h_orig, w_orig)
-            new_w, new_h = int(w_orig * scale), int(h_orig * scale)
-            new_w -= new_w % 8
-            new_h -= new_h % 8
-            proc_img = cv2.resize(crop_img, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
-            proc_mask = cv2.resize(crop_mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
-        else:
-            new_w = w_orig - (w_orig % 8)
-            new_h = h_orig - (h_orig % 8)
-            proc_img = crop_img[:new_h, :new_w]
-            proc_mask = crop_mask[:new_h, :new_w]
+        target_res = 512 # Default processing resolution
+        if config.get('inpaint_width', 0) > 0: target_res = config['inpaint_width']
+        
+        do_rotate = config.get('auto_rotate', False) and kps is not None
+        
+        # 1. Align & Crop (Image & Mask)
+        proc_img, M = align_and_crop(image, box, kps, target_size=target_res, padding=padding_ratio, force_rotate=do_rotate)
+        proc_mask, _ = align_and_crop(mask, box, kps, target_size=target_res, padding=padding_ratio, force_rotate=do_rotate, borderMode=cv2.BORDER_CONSTANT)
+        
+        # Binarize mask after warping
+        _, proc_mask = cv2.threshold(proc_mask, 127, 255, cv2.THRESH_BINARY)
+        
+        new_h, new_w = proc_img.shape[:2]
 
         pil_img = Image.fromarray(cv2.cvtColor(proc_img, cv2.COLOR_BGR2RGB))
         pil_mask = Image.fromarray(proc_mask)
@@ -223,19 +250,15 @@ class ImageProcessor:
 
         # Paste Back (Alpha Blend)
         res_np = cv2.cvtColor(np.array(output), cv2.COLOR_RGB2BGR)
-        res_np = cv2.resize(res_np, (w_orig, h_orig), interpolation=cv2.INTER_LANCZOS4)
-        
-        alpha = crop_mask.astype(float) / 255.0
         
         # Restore Face (얼굴 보정)
         if config.get('restore_face', False):
             res_np = self.face_restorer.restore(res_np)
 
-        alpha = cv2.merge([alpha, alpha, alpha])
-        blended = res_np.astype(float) * alpha + crop_img.astype(float) * (1.0 - alpha)
+        # [Fix] Use Geometry Module for Inverse Transform & Blending
+        final_img = restore_and_paste(image, res_np, M, mask_blur=config['mask_blur'])
         
-        image[y1:y2, x1:x2] = np.clip(blended, 0, 255).astype(np.uint8)
-        return image
+        return final_img
 
     def _calc_dynamic_denoise(self, box, img_shape, base):
         x1, y1, x2, y2 = box
@@ -291,9 +314,10 @@ class ImageProcessor:
                 if pad_len > 0:
                     input_ids += [pad_token] * pad_len
                 
-                input_tensor = torch.tensor([input_ids], device=self.device)
+                # [Fix] CPU Offload 호환성: 모델이 CPU에 있으면 입력도 CPU로 생성
+                input_tensor = torch.tensor([input_ids], device=text_encoder.device)
                 embeds.append(text_encoder(input_tensor)[0])
-            return torch.cat(embeds, dim=1)
+            return torch.cat(embeds, dim=1).to(self.device)
 
         return encode(pos_chunks), encode(neg_chunks)
 

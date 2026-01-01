@@ -165,13 +165,11 @@ class ComparisonViewer(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(QPoint(split_x, h // 2), 6, 6)
 
-        # 6. 텍스트 라벨 [수정 완료]
-        # QFont() 생성 및 setPointSize() 제거 -> painter.font() 사용
+        # 6. 텍스트 라벨
         painter.setPen(QColor(255, 255, 255))
         
         font = painter.font() # 현재 위젯에 적용된 안전한 폰트 가져오기
         font.setBold(True)    # 굵게만 설정
-        # font.setPointSize(10) # <--- [에러 원인] 이 줄을 삭제했습니다.
         painter.setFont(font)
         
         def draw_text_with_shadow(x, y, text):

@@ -1,1 +1,76 @@
-# objectDetailer
+# ObjectDetailer (Standalone)
+
+**ObjectDetailer** is a standalone desktop application designed to automatically detect, mask, and refinement specific objects (such as faces, hands, or people) within images using Generative AI. 
+It implements the functionality of the popular "ADetailer" extension as an independent tool, powered by Stable Diffusion, YOLO, and SAM (Segment Anything Model).
+
+**ObjectDetailer**는 이미지 내의 특정 객체(얼굴, 손, 사람 등)를 자동으로 탐지하고 마스킹하여 생성형 AI로 디테일을 보정해주는 독립형 데스크톱 애플리케이션입니다.
+Stable Diffusion, YOLO, SAM(Segment Anything Model) 기술을 기반으로 하며, 기존 ADetailer 확장 기능을 별도의 웹 UI 없이 로컬에서 독립적으로 실행할 수 있도록 구현했습니다.
+
+---
+
+## ✨ Key Features (주요 기능)
+
+* **Auto-Detection**: Automatically detects objects using state-of-the-art models (YOLO, MediaPipe, etc.).
+    * **자동 탐지**: 최신 객체 탐지 모델을 사용하여 이미지 내 객체를 자동으로 찾아냅니다.
+* **Smart Segmentation**: Utilizes the Segment Anything Model (SAM) for pixel-perfect masking.
+    * **정교한 세그멘테이션**: SAM을 활용하여 탐지된 객체의 외곽선을 정밀하게 따냅니다.
+* **AI Inpainting**: Refines and regenerates detected areas using Stable Diffusion for higher quality details.
+    * **AI 인페인팅**: Stable Diffusion을 사용하여 탐지된 영역을 고화질로 다시 그려 디테일을 향상시킵니다.
+* **Standalone GUI**: User-friendly interface built with PySide6/PyQt, requiring no browser or WebUI.
+    * **독립형 GUI**: 웹 브라우저나 복잡한 WebUI 설치 없이 직관적인 데스크톱 인터페이스를 제공합니다.
+* **Multi-Model Support**: Supports various checkpoints and LoRAs for customized generation.
+    * **다양한 모델 지원**: 사용자가 원하는 체크포인트와 LoRA를 적용하여 스타일을 커스텀할 수 있습니다.
+
+---
+
+## 🛠️ Prerequisites (준비 사항)
+
+* **OS**: Windows 10/11 (Recommended), Linux
+* **Python**: 3.10+
+* **GPU**: NVIDIA GPU with CUDA support (Minimum 8GB VRAM recommended)
+    * NVIDIA GPU 및 CUDA 환경 (최소 8GB VRAM 권장)
+
+---
+
+## 🚀 Installation (설치 방법)
+
+1.  **Clone the repository**
+    ```bash
+    git clone [https://github.com/your-username/ObjectDetailer.git](https://github.com/your-username/ObjectDetailer.git)
+    cd ObjectDetailer
+    ```
+
+2.  **Create a Virtual Environment (Recommended)**
+    ```bash
+    # Windows
+    python -m venv venv
+    venv\Scripts\activate
+
+    # Linux/Mac
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+
+3.  **Install Dependencies**
+    ```bash
+    pip install -r requirements.txt
+    ```
+    *(Note: Ensure you have the correct version of PyTorch installed for your CUDA version.)*
+
+4.  **Download Models**
+    Run the included script to download necessary model weights (YOLO, SAM, etc.).
+    ```bash
+    python download_models.py
+    ```
+
+---
+
+## 💻 Usage (사용 방법)
+
+### Quick Start (Windows)
+Simply run the `run.bat` file.
+`run.bat` 파일을 실행하면 가상환경 진입부터 실행까지 자동으로 진행됩니다.
+
+### Manual Start
+```bash
+python main.py# objectDetailer

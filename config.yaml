@@ -85,11 +85,11 @@ ui_settings:
     noise_multiplier: 1.0
     seed: -1
   패스 2:
-    enabled: false
+    enabled: true
     detector_model: Anzhcs ManFace v02 1024 y8n.pt
     use_sam: false
     auto_prompt_injection: true
-    gender_filter: Male
+    gender_filter: All
     ignore_edge_touching: false
     anatomy_check: true
     auto_rotate: true
@@ -202,25 +202,25 @@ ui_settings:
     conf_thresh: 0.3
     min_face_ratio: 0.0
     max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
-    mask_dilation: 8
+    mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
     x_offset: 0
     y_offset: 0
+    denoising_strength: 0.4
+    crop_padding: 32
     control_weight: 1.0
     guidance_start: 0.0
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     seed: -1
   패스 3:
     enabled: true
-    detector_model: Anzhc Face seg 1024 v2 y8n.pt
+    detector_model: Anzhcs WomanFace v05 1024 y8n.pt
     use_sam: false
     auto_prompt_injection: true
     gender_filter: All
@@ -1205,24 +1205,24 @@ ui_settings:
     sep_clip: true
     clip_skip: 2
     restore_face: false
-    conf_thresh: 0.1
-    min_face_ratio: 0.01
+    conf_thresh: 0.3
+    min_face_ratio: 0.0
     max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
     x_offset: 0
     y_offset: 0
+    denoising_strength: 0.4
+    crop_padding: 32
     control_weight: 1.0
     guidance_start: 0.0
     guidance_end: 1.0
     upscale_factor: 1.5
     noise_multiplier: 1.0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     seed: -1
   패스 4:
     enabled: false

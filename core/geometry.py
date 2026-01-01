@@ -24,13 +24,22 @@ def get_rotation_angle(kps):
     dy = r_eye[1] - l_eye[1]
     dx = r_eye[0] - l_eye[0]
     angle = math.degrees(math.atan2(dy, dx))
-    return angle
     
-    # [Fix] 180도 뒤집힌 얼굴 보정
-    # 코가 눈보다 위에 있으면, 180도 뒤집힌 것으로 간주
-    eye_center_y = (l_eye[1] + r_eye[1]) / 2
-    if nose[1] < eye_center_y:
+    # [Fix] 코의 위치를 이용한 방향 보정 (Cross Product)
+    # 기존의 단순 Y좌표 비교는 옆으로 누운 얼굴에서 오작동하므로 벡터 외적을 사용합니다.
+    # 눈 벡터(L->R)와 눈->코 벡터의 외적을 계산하여 코가 올바른 방향에 있는지 확인합니다.
+    ex = dx
+    ey = dy
+    nx = nose[0] - l_eye[0]
+    ny = nose[1] - l_eye[1]
+    
+    # 2D 외적 (x1*y2 - x2*y1): 음수면 코가 반대편에 있다는 의미
+    cross_product = ex * ny - ey * nx
+    
+    if cross_product < 0:
         angle += 180
+        
+    return angle
 
 def rotate_point(pt, angle, center):
     """

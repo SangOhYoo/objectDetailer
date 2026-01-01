@@ -50,26 +50,6 @@ if __name__ == "__main__":
 
     app = QApplication(sys.argv)
 
-    # 탭 선택 가시성을 높이기 위한 스타일시트 적용
-    app.setStyleSheet("""
-        QTabBar::tab {
-            background: #E0E0E0;
-            color: #000000;
-            padding: 8px 15px;
-            margin-right: 2px;
-            border-top-left-radius: 4px;
-            border-top-right-radius: 4px;
-        }
-        QTabBar::tab:selected {
-            background: #0078D7;
-            color: #FFFFFF;
-            font-weight: bold;
-        }
-        QTabBar::tab:hover:!selected {
-            background: #D0D0D0;
-        }
-    """)
-
     window = MainWindow()
     window.show()
     exit_code = app.exec()

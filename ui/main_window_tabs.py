@@ -31,6 +31,15 @@ class AdetailerUnitWidget(QWidget):
         self.main_layout.setSpacing(10)
         self.main_layout.setContentsMargins(4, 4, 4, 4)
 
+        # [Fix] 기존 설정(Ratio 0~1)을 % 단위(0~100)로 변환하여 UI에 표시
+        # 이렇게 하면 사용자가 0.3을 입력했을 때 0.3% (0.003)으로 인식하게 되어 직관적임
+        if 'min_face_ratio' in self.saved_config:
+             val = self.saved_config['min_face_ratio']
+             if val <= 1.0: self.saved_config['min_face_ratio'] = val * 100.0
+        if 'max_face_ratio' in self.saved_config:
+             val = self.saved_config['max_face_ratio']
+             if val <= 1.0: self.saved_config['max_face_ratio'] = val * 100.0
+
         group_model = QGroupBox("1. 모델 및 모드 (Model & Mode)")
         layout_model = QGridLayout()
         layout_model.setContentsMargins(5, 8, 5, 5)
@@ -133,9 +142,9 @@ class AdetailerUnitWidget(QWidget):
         layout_detect.addLayout(layout_top_detect, 0, 0, 1, 3)
 
         self.add_slider_row(layout_detect, 1, "신뢰도(Conf):", "conf_thresh", 0.0, 1.0, 0.35, 0.01)
-        # [복구] 최소 크기와 최대 크기를 나란히 배치
-        self.add_slider_row(layout_detect, 2, "최소 크기(%):", "min_face_ratio", 0.0, 1.0, 0.01, 0.01)
-        self.add_slider_row(layout_detect, 3, "최대 크기(%):", "max_face_ratio", 0.0, 1.0, 1.00, 0.01) # [누락 복구]
+        # [Fix] 최소/최대 크기 단위를 % (0~100)로 변경 (사용자 입력 0.3 -> 0.3%로 인식)
+        self.add_slider_row(layout_detect, 2, "최소 크기(%):", "min_face_ratio", 0.0, 100.0, 1.0, 0.1)
+        self.add_slider_row(layout_detect, 3, "최대 크기(%):", "max_face_ratio", 0.0, 100.0, 100.0, 0.1)
         
         layout_detect.addWidget(QLabel("최대 검출 수:"), 4, 0)
         self.spin_top_k = QSpinBox()
@@ -517,7 +526,11 @@ class AdetailerUnitWidget(QWidget):
 
         # 슬라이더 값들 병합 (Max Face Ratio 등 포함)
         for key, widget in self.settings.items():
-            cfg[key] = widget.value()
+            val = widget.value()
+            # [Fix] % 단위 UI 값을 Ratio(0~1)로 변환하여 로직에 전달
+            if key in ['min_face_ratio', 'max_face_ratio']:
+                val /= 100.0
+            cfg[key] = val
             
         cfg['seed'] = -1
         return cfg

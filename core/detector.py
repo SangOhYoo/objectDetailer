@@ -1,6 +1,7 @@
 import os
 import cv2
 import numpy as np
+import torch
 from ultralytics import YOLO
 
 try:
@@ -37,7 +38,45 @@ class ObjectDetector:
             self.yolo_models[model_name] = YOLO(load_target)
 
         model = self.yolo_models[model_name]
-        results = model.predict(image, conf=conf, device=self.device, verbose=False)
+        
+        # [Fix] Ultralytics device handling & Meta tensor error fallback
+        device_arg = self.device
+        if isinstance(device_arg, str) and device_arg.startswith("cuda:"):
+            try:
+                device_arg = int(device_arg.split(":")[1])
+            except:
+                pass
+        
+        try:
+            results = model.predict(image, conf=conf, device=device_arg, verbose=False)
+        except NotImplementedError:
+            print(f"[Detector] Warning: GPU inference failed (Meta tensor error). Reloading model on CPU for {model_name}.")
+            
+            # Reload model to recover from broken state (Meta device)
+            if model_name in self.yolo_models:
+                del self.yolo_models[model_name]
+            
+            filename = model_name if model_name.endswith('.pt') else f"{model_name}.pt"
+            model_path = os.path.join(self.model_dir, filename)
+            load_target = model_path if os.path.exists(model_path) else filename
+            
+            # [Fix] Manually load checkpoint to CPU to bypass meta-device context
+            try:
+                ckpt = torch.load(load_target, map_location='cpu')
+                if isinstance(ckpt, dict) and 'model' in ckpt:
+                    model = YOLO(ckpt['model'])
+                else:
+                    model = YOLO(load_target)
+            except Exception as e:
+                print(f"[Detector] Manual load failed: {e}. Using standard reload.")
+                model = YOLO(load_target)
+
+            self.yolo_models[model_name] = model
+            try:
+                results = model.predict(image, conf=conf, device='cpu', verbose=False)
+            except Exception as e:
+                print(f"[Detector] CPU inference also failed: {e}")
+                return []
         
         detections = []
         for result in results:

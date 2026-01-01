@@ -9,6 +9,7 @@ paths:
   vae: D:/AI_Models/VAE
   lora: D:/AI_Models/Lora
   controlnet: D:/AI_Models/ControlNet
+  gfpgan: D:/AI_Models/GFPGAN
 files:
   checkpoint_file: henmix_real_v6b-fp16-no-ema.safetensors
   sam_file: sam3.pt
@@ -81,19 +82,22 @@ ui_settings:
     noise_multiplier: 1.0
     seed: -1
   패스 2:
-    enabled: false
-    detector_model: adetailerAfterDetailer_v10.pt
+    enabled: true
+    detector_model: Anzhc Breasts Seg v1 1024s.pt
     use_sam: false
     auto_prompt_injection: true
-    gender_filter: All
+    gender_filter: Female
     ignore_edge_touching: false
-    anatomy_check: true
-    auto_rotate: true
+    anatomy_check: false
+    auto_rotate: false
     color_fix: None
     use_hires_fix: false
-    pos_prompt: ''
-    neg_prompt: ''
-    max_det: 20
+    pos_prompt: score 9, score 8 up, score 7 up, score 6 up, zPDXL3, 8k uhd, (pale
+      skin:0.9), (large breasts:1.1), (detailed nipples, normal nipples, cute nipples,
+      puffy nipples),
+    neg_prompt: 'score 6, score 5, score 4, pony, muscular, makeup, censored, furry,
+      (child, kid, chibi:1.1), big breasts, big chest, cgi, '
+    max_det: 1
     use_controlnet: false
     control_model: None
     control_module: inpaint_global_harmonious
@@ -103,11 +107,11 @@ ui_settings:
     use_noise_mask: false
     mask_merge_mode: false
     sep_ckpt: true
-    sep_ckpt_name: henmix_real_v6b-fp16-no-ema.safetensors
-    sep_vae: false
-    sep_vae_name: Use Global
+    sep_ckpt_name: pinkiepiePonyMix_v36Fp16.safetensors
+    sep_vae: true
+    sep_vae_name: sdxl_vae.safetensors
     sep_sampler: true
-    sampler_name: Euler a Karras
+    sampler_name: DPM++ 2M Karras
     sep_steps: true
     steps: 24
     sep_cfg: true

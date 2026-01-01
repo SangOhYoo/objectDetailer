@@ -19,7 +19,6 @@ class AdetailerUnitWidget(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        print(f"[DEBUG] AdetailerUnitWidget({self.unit_name}) init_ui started.")
         # 스크롤 영역 설정
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)

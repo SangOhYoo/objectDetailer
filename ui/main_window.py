@@ -17,7 +17,6 @@ from core.config import config_instance as cfg
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        print(f"[DEBUG] MainWindow initialized. Global Font: point={self.font().pointSize()}, pixel={self.font().pixelSize()}")
         self.setWindowTitle("Standalone ADetailer - Dual GPU Edition")
         self.resize(1600, 1200) # 기본 사이즈
         
@@ -27,7 +26,6 @@ class MainWindow(QMainWindow):
         self.apply_light_theme() # 기본 테마
 
     def init_ui(self):
-        print("[DEBUG] MainWindow.init_ui() started.")
         # ============================================================
         # [Menu Bar] 파일 메뉴 & 테마 메뉴
         # ============================================================
@@ -214,7 +212,6 @@ class MainWindow(QMainWindow):
 
     # --- Theme & Basics ---
     def apply_dark_theme(self):
-        print("[DEBUG] Applying Dark Theme...")
         dark_style = """
             QMainWindow, QWidget { background-color: #2b2b2b; color: #eeeeee; font-size: 10pt; }
             QSplitter::handle { background-color: #444; width: 4px; }
@@ -232,10 +229,8 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(dark_style)
         self.log_text.setStyleSheet("background-color: #1e1e1e; color: #00ff00; border: 2px solid #c0392b; font-family: Consolas;")
         self.btn_stop.setStyleSheet("background-color: #c0392b; color: white;")
-        print(f"[DEBUG] Dark Theme Applied. Window Font: point={self.font().pointSize()}, pixel={self.font().pixelSize()}")
 
     def apply_light_theme(self):
-        print("[DEBUG] Applying Light Theme...")
         light_style = """
             QMainWindow, QWidget { background-color: #f5f5f5; color: #333333; font-size: 10pt; }
             QSplitter::handle { background-color: #ccc; width: 4px; }
@@ -253,7 +248,6 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(light_style)
         self.log_text.setStyleSheet("background-color: #ffffff; color: #000000; border: 2px solid #c0392b; font-family: Consolas;")
         self.btn_stop.setStyleSheet("background-color: #d32f2f; color: white;")
-        print(f"[DEBUG] Light Theme Applied. Window Font: point={self.font().pointSize()}, pixel={self.font().pixelSize()}")
 
     def log(self, message):
         self.log_text.append(message)
@@ -295,6 +289,10 @@ class MainWindow(QMainWindow):
             self.log("No enabled tabs. Enable at least one pass.")
             return
 
+        # [Fix] 중복 실행 방지: 기존 작업 중지
+        if self.controller:
+            self.controller.stop()
+
         self.log("Starting batch processing...")
         self.controller = ProcessingController(files, configs)
         self.controller.log_signal.connect(self.log)
@@ -304,7 +302,12 @@ class MainWindow(QMainWindow):
         self.controller.start_processing()
 
     def handle_result(self, path, result_img):
+        if result_img is None:
+            self.log(f"Failed: {os.path.basename(path)}")
+            return
+
         self.log(f"Finished: {os.path.basename(path)}")
+        self.file_queue.select_item_by_path(path)
         self.sub_view.set_image(result_img)
         self.compare_view.pixmap_after = self.compare_view._np2pix(result_img)
         self.compare_view.update()
@@ -321,7 +324,8 @@ class MainWindow(QMainWindow):
 
     def stop_processing(self):
         self.log("Stopping processing...")
-        # if self.controller: self.controller.stop()
+        if self.controller:
+            self.controller.stop()
 
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication

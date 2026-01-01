@@ -1,4 +1,5 @@
 import os
+import re
 import cv2
 import numpy as np
 import torch
@@ -53,14 +54,23 @@ class ImageProcessor:
             clip_skip = int(config.get('clip_skip', 1)) if config.get('sep_clip') else 1
 
             self.model_manager.load_sd_model(ckpt_path, vae_path, cn_path, clip_skip)
-            self.model_manager.manage_lora(config, action="load")
+            
+            # [New] Prompt 기반 LoRA 파싱 및 로드
+            raw_prompt = config.get('pos_prompt', '')
+            clean_prompt, lora_list = self._parse_and_extract_loras(raw_prompt)
+            
+            self.model_manager.manage_lora(lora_list, action="load")
+            
+            # 이번 패스에서만 사용할 Clean Prompt 적용 (Config 복사본 사용)
+            pass_config = config.copy()
+            pass_config['pos_prompt'] = clean_prompt
 
             try:
-                result_img = self._process_pass(result_img, config)
+                result_img = self._process_pass(result_img, pass_config)
                 if self.preview_callback:
                     self.preview_callback(result_img)
             finally:
-                self.model_manager.manage_lora(config, action="unload")
+                self.model_manager.manage_lora(lora_list, action="unload")
                 
         return result_img
 
@@ -140,33 +150,39 @@ class ImageProcessor:
 
         # ControlNet
         control_args = {}
-        if config['use_controlnet'] and hasattr(self.model_manager.pipe, "controlnet"):
-            cn_model = config.get('control_model', '').lower()
-            
-            if 'tile' in cn_model:
-                # Tile 모델은 원본 이미지를 그대로 사용 (혹은 블러)
+        # [Fix] 파이프라인에 ControlNet이 로드되어 있다면, 설정(use_controlnet)과 무관하게 이미지를 공급해야 함
+        if hasattr(self.model_manager.pipe, "controlnet"):
+            if not config['use_controlnet']:
+                # ControlNet이 로드되었으나 사용 안 함 -> 가중치 0으로 설정하여 영향력 제거
                 control_args["control_image"] = pil_img
-            elif 'openpose' in cn_model:
-                # OpenPose 지원
-                try:
-                    from controlnet_aux import OpenposeDetector
-                    # 매번 로드하면 느리지만, 현재 구조상 여기서 처리 (추후 캐싱 필요)
-                    openpose = OpenposeDetector.from_pretrained("lllyasviel/ControlNet")
-                    openpose.to(self.device)
-                    pose_img = openpose(pil_img)
-                    control_args["control_image"] = pose_img
-                except ImportError:
-                    print("[Pipeline] Warning: controlnet_aux not found. OpenPose disabled.")
-                    control_args["control_image"] = pil_img # Fallback
+                control_args["controlnet_conditioning_scale"] = 0.0
             else:
-                # 기본값: Canny (OpenPose 등은 별도 전처리기 필요하나 여기선 Canny로 fallback)
-                canny = cv2.Canny(proc_img, 100, 200)
-                canny = np.stack([canny] * 3, axis=-1)
-                control_args["control_image"] = Image.fromarray(canny)
+                cn_model = config.get('control_model', '').lower()
             
-            control_args["controlnet_conditioning_scale"] = float(config['control_weight'])
-            control_args["control_guidance_start"] = float(config.get('guidance_start', 0.0))
-            control_args["control_guidance_end"] = float(config.get('guidance_end', 1.0))
+                if 'tile' in cn_model:
+                    # Tile 모델은 원본 이미지를 그대로 사용 (혹은 블러)
+                    control_args["control_image"] = pil_img
+                elif 'openpose' in cn_model:
+                    # OpenPose 지원
+                    try:
+                        from controlnet_aux import OpenposeDetector
+                        # 매번 로드하면 느리지만, 현재 구조상 여기서 처리 (추후 캐싱 필요)
+                        openpose = OpenposeDetector.from_pretrained("lllyasviel/ControlNet")
+                        openpose.to(self.device)
+                        pose_img = openpose(pil_img)
+                        control_args["control_image"] = pose_img
+                    except ImportError:
+                        print("[Pipeline] Warning: controlnet_aux not found. OpenPose disabled.")
+                        control_args["control_image"] = pil_img # Fallback
+                else:
+                    # 기본값: Canny (OpenPose 등은 별도 전처리기 필요하나 여기선 Canny로 fallback)
+                    canny = cv2.Canny(proc_img, 100, 200)
+                    canny = np.stack([canny] * 3, axis=-1)
+                    control_args["control_image"] = Image.fromarray(canny)
+            
+                control_args["controlnet_conditioning_scale"] = float(config['control_weight'])
+                control_args["control_guidance_start"] = float(config.get('guidance_start', 0.0))
+                control_args["control_guidance_end"] = float(config.get('guidance_end', 1.0))
 
         # [Fix] Long Prompt Support (Token Chunking)
         prompt_embeds, neg_prompt_embeds = self._get_long_prompt_embeds(
@@ -207,7 +223,7 @@ class ImageProcessor:
         alpha = crop_mask.astype(float) / 255.0
         
         # Restore Face (얼굴 보정)
-        if config.get('restore_face'):
+        if config.get('restore_face', False):
             res_np = self.face_restorer.restore(res_np)
 
         alpha = cv2.merge([alpha, alpha, alpha])
@@ -275,3 +291,21 @@ class ImageProcessor:
             return torch.cat(embeds, dim=1)
 
         return encode(pos_chunks), encode(neg_chunks)
+
+    def _parse_and_extract_loras(self, prompt):
+        """
+        프롬프트에서 <lora:filename:multiplier> 태그를 추출하고 제거합니다.
+        반환값: (clean_prompt, [(name, scale), ...])
+        """
+        # 정규식: <lora:이름> 또는 <lora:이름:강도>
+        pattern = r"<lora:([^:>]+)(?::([\d.]+))?>"
+        loras = []
+        
+        def replace_func(match):
+            name = match.group(1)
+            scale = float(match.group(2)) if match.group(2) else 1.0
+            loras.append((name, scale))
+            return "" # 태그 제거
+            
+        clean_prompt = re.sub(pattern, replace_func, prompt)
+        return clean_prompt, loras

@@ -10,6 +10,7 @@ import json
 import cv2
 import numpy as np
 from PIL import Image, PngImagePlugin, ImageOps
+from core.io_utils import imwrite
 
 def load_image_as_pil(image_path):
     """
@@ -74,5 +75,5 @@ def save_image_with_metadata(cv2_image, original_path, save_path, config):
     except Exception as e:
         print(f"[Metadata] 저장 실패 ({save_path}): {e}")
         # 실패 시 비상용으로 OpenCV 저장 시도 (메타데이터는 포기)
-        cv2.imwrite(save_path, cv2_image)
+        imwrite(save_path, cv2_image)
         return False

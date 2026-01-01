@@ -124,11 +124,6 @@ class ComparisonViewer(QWidget):
         return QPixmap.fromImage(qimg.copy())
 
     def paintEvent(self, event):
-        # [DEBUG] 페인트 이벤트 시작 시점의 위젯 폰트 상태 확인
-        print(f"[DEBUG] ComparisonViewer.paintEvent | Widget Font: point={self.font().pointSize()}")
-        # [DEBUG] 페인트 이벤트 시작 시점의 위젯 폰트 상태 확인
-        # print(f"[DEBUG] ComparisonViewer.paintEvent | Widget Font: point={self.font().pointSize()}, pixel={self.font().pixelSize()}")
-        
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
@@ -136,8 +131,6 @@ class ComparisonViewer(QWidget):
         # Painter 초기화 직후 안전한 폰트로 교체하여 모든 drawText 호출 시 에러 예방
         safe_font = QFont("Arial", 9)
         painter.setFont(safe_font)
-        print(f"[DEBUG] Painter Font Set to Arial 9 | Current PointSize: {painter.font().pointSize()}")
-        # print(f"[DEBUG] Painter Font Set to Arial 9 | Current PointSize: {painter.font().pointSize()}")
         
         w = self.width()
         h = self.height()
@@ -181,8 +174,6 @@ class ComparisonViewer(QWidget):
         # 6. 텍스트 라벨
         painter.setPen(QColor(255, 255, 255))
         
-        print("[DEBUG] Setting bold font for labels.")
-        # print("[DEBUG] Setting bold font for labels.")
         font = painter.font()
         font.setBold(True)
         painter.setFont(font)
@@ -267,10 +258,17 @@ class FileQueueWidget(QWidget):
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent):
+        added = False
         for url in event.mimeData().urls():
             file_path = url.toLocalFile()
             if file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.bmp')):
                 self._add_item(file_path)
+                added = True
+        
+        if added and self.list_widget.count() > 0:
+            item = self.list_widget.item(0)
+            self.list_widget.setCurrentItem(item)
+            self._on_click(item)
 
     def _open_file_dialog(self):
         files, _ = QFileDialog.getOpenFileNames(
@@ -309,6 +307,14 @@ class FileQueueWidget(QWidget):
     def get_all_files(self):
         return [self.list_widget.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.list_widget.count())]
 
+    def select_item_by_path(self, path):
+        """경로에 해당하는 아이템을 선택 상태로 변경 (시그널 발생 없음)"""
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == path:
+                self.list_widget.setCurrentItem(item)
+                self.list_widget.scrollToItem(item)
+                break
 
 # =========================================================
 # 4. 로그 콘솔 (기존 유지)

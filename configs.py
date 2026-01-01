@@ -119,7 +119,7 @@ class DetailerConfig:
     
     # 샘플러 설정
     sampler_name: str = "DPM++ 2M Karras"
-    steps: int = 25
+    steps: int = 24
     cfg_scale: float = 7.0
     seed: int = -1  # -1은 랜덤
     

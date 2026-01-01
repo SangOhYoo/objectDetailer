@@ -101,6 +101,20 @@ class MainWindow(QMainWindow):
         global_layout.addWidget(self.combo_global_vae, 1)
         
         self.combo_global_ckpt.currentTextChanged.connect(self.on_global_ckpt_changed)
+
+        # [New] Global Save/Load Buttons
+        btn_global_save = QPushButton("💾 저장")
+        btn_global_save.setToolTip("현재 선택된 체크포인트와 VAE를 config.yaml에 저장합니다.")
+        btn_global_save.clicked.connect(self.save_global_settings)
+        btn_global_save.setMaximumWidth(70)
+        
+        btn_global_load = QPushButton("🔄 로드")
+        btn_global_load.setToolTip("config.yaml에서 설정을 다시 불러옵니다.")
+        btn_global_load.clicked.connect(self.load_global_settings)
+        btn_global_load.setMaximumWidth(70)
+
+        global_layout.addWidget(btn_global_save)
+        global_layout.addWidget(btn_global_load)
         
         self.global_group.setLayout(global_layout)
         left_layout.addWidget(self.global_group)
@@ -188,6 +202,9 @@ class MainWindow(QMainWindow):
         # Trigger initial model check
         if self.combo_global_ckpt.count() > 0:
             self.on_global_ckpt_changed(self.combo_global_ckpt.currentText())
+            
+        # [New] 초기 실행 시 config.yaml 값 로드
+        self.load_global_settings(silent=True)
 
     # --- Save Logic ---
     def save_all_configs(self):
@@ -220,6 +237,39 @@ class MainWindow(QMainWindow):
         if success:
             self.log(f"[Config] Settings for {tab.unit_name} saved.")
             QMessageBox.information(self, "저장 완료", f"{tab.unit_name} 설정이 저장되었습니다.")
+
+    def save_global_settings(self):
+        """글로벌 모델 설정을 config.yaml에 저장"""
+        ckpt = self.combo_global_ckpt.currentText()
+        vae = self.combo_global_vae.currentText()
+        
+        files_conf = cfg.get('files') or {}
+        files_conf['checkpoint_file'] = ckpt
+        files_conf['vae_file'] = vae
+        
+        if cfg.save_config({'files': files_conf}):
+            self.log(f"[Config] Global settings saved: CKPT='{ckpt}', VAE='{vae}'")
+            QMessageBox.information(self, "저장 완료", "글로벌 모델 설정이 config.yaml에 저장되었습니다.")
+        else:
+            self.log("[Config] Failed to save global settings.")
+
+    def load_global_settings(self, silent=False):
+        """config.yaml에서 글로벌 모델 설정을 불러와 UI에 적용"""
+        cfg.load_config(cfg.config_path)
+        
+        ckpt = cfg.get('files', 'checkpoint_file')
+        vae = cfg.get('files', 'vae_file')
+        
+        if ckpt:
+            idx = self.combo_global_ckpt.findText(ckpt)
+            if idx >= 0: self.combo_global_ckpt.setCurrentIndex(idx)
+        if vae:
+            idx = self.combo_global_vae.findText(vae)
+            if idx >= 0: self.combo_global_vae.setCurrentIndex(idx)
+            
+        if not silent:
+            self.log(f"[Config] Global settings loaded: CKPT='{ckpt}', VAE='{vae}'")
+            QMessageBox.information(self, "로드 완료", "글로벌 모델 설정을 불러왔습니다.")
 
     # --- Theme & Basics ---
     def apply_dark_theme(self):
@@ -277,10 +327,28 @@ class MainWindow(QMainWindow):
             stream = open(file_path.encode("utf-8"), "rb")
             bytes = bytearray(stream.read())
             numpyarray = np.asarray(bytes, dtype=np.uint8)
-            img = cv2.imdecode(numpyarray, cv2.IMREAD_COLOR)
-            if img is not None:
-                self.compare_view.set_images(img, img)
-                self.sub_view.set_image(img)
+            img_before = cv2.imdecode(numpyarray, cv2.IMREAD_COLOR)
+            
+            if img_before is not None:
+                # [Fix] 결과물이 존재하면 로드하여 After 이미지로 설정 (슬라이더 작동 보장)
+                output_dir = cfg.get('system', 'output_path') or "outputs"
+                filename = os.path.basename(file_path)
+                output_path = os.path.join(output_dir, filename)
+                
+                img_after = img_before # 기본값은 원본
+                if os.path.exists(output_path):
+                    try:
+                        stream_out = open(output_path.encode("utf-8"), "rb")
+                        bytes_out = bytearray(stream_out.read())
+                        numpyarray_out = np.asarray(bytes_out, dtype=np.uint8)
+                        loaded_after = cv2.imdecode(numpyarray_out, cv2.IMREAD_COLOR)
+                        if loaded_after is not None:
+                            img_after = loaded_after
+                    except:
+                        pass
+
+                self.compare_view.set_images(img_before, img_after)
+                self.sub_view.set_image(img_after)
         except Exception as e:
             self.log(f"Error loading preview: {e}")
 
@@ -344,9 +412,19 @@ class MainWindow(QMainWindow):
 
         self.log(f"Finished: {os.path.basename(path)}")
         self.file_queue.select_item_by_path(path)
+        
+        # [Fix] 처리 완료 시 원본 이미지도 함께 로드하여 비교 뷰어(슬라이더) 즉시 갱신
+        try:
+            stream = open(path.encode("utf-8"), "rb")
+            bytes = bytearray(stream.read())
+            numpyarray = np.asarray(bytes, dtype=np.uint8)
+            img_before = cv2.imdecode(numpyarray, cv2.IMREAD_COLOR)
+            self.compare_view.set_images(img_before, result_img)
+        except:
+            self.compare_view.pixmap_after = self.compare_view._np2pix(result_img)
+            self.compare_view.update()
+            
         self.sub_view.set_image(result_img)
-        self.compare_view.pixmap_after = self.compare_view._np2pix(result_img)
-        self.compare_view.update()
 
     def update_progress(self, current, total):
         self.progress_bar.setVisible(True)

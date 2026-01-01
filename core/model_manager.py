@@ -152,9 +152,12 @@ class ModelManager:
             # [Fix] OOM 방지를 위해 CPU Offload 활성화.
             # 파이프라인의 각 부분을 필요할 때만 VRAM으로 로드하여 메모리를 크게 절약합니다.
             # 멀티 GPU 환경에서 각 워커가 독립적으로 작동하도록 device를 명시합니다.
-            # [Fix] YOLO와의 Meta Tensor 충돌을 근본적으로 해결하기 위해 CPU Offload를 비활성화하고,
-            # 안정적인 표준 .to(device) 방식으로 전환합니다. VRAM 절약은 VAE Tiling/Slicing으로 대체합니다.
-            self.pipe.to(self.device)
+            # [Fix] SDXL 모델은 VRAM 소모가 크므로 CPU Offload를 사용하여 OOM 방지
+            if is_sdxl:
+                # main.py의 accelerate 패치가 적용되어 있어 Meta Tensor 충돌 위험이 낮음
+                self.pipe.enable_model_cpu_offload(device=self.device)
+            else:
+                self.pipe.to(self.device)
 
             self.current_config = new_config
             self.loaded_loras = [] # 모델이 바뀌면 LoRA 상태 초기화

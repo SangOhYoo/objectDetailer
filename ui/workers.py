@@ -12,6 +12,7 @@ _job_queue = Queue()
 class ProcessingController(QObject):
     log_signal = pyqtSignal(str)
     progress_signal = pyqtSignal(int, int)
+    preview_signal = pyqtSignal(np.ndarray)
     result_signal = pyqtSignal(str, np.ndarray)
     finished_signal = pyqtSignal()
 
@@ -38,6 +39,7 @@ class ProcessingController(QObject):
             dev_id = f"cuda:{i}" if torch.cuda.is_available() else "cpu"
             worker = GpuWorker(dev_id, self.configs, worker_id=i)
             worker.log_signal.connect(self.log_signal.emit)
+            worker.preview_signal.connect(self.preview_signal.emit)
             worker.result_signal.connect(self.handle_result)
             worker.finished_signal.connect(self.check_finished)
             self.workers.append(worker)
@@ -54,6 +56,7 @@ class ProcessingController(QObject):
 
 class GpuWorker(QThread):
     log_signal = pyqtSignal(str)
+    preview_signal = pyqtSignal(np.ndarray)
     result_signal = pyqtSignal(str, np.ndarray)
     finished_signal = pyqtSignal()
 
@@ -64,10 +67,13 @@ class GpuWorker(QThread):
         self.worker_id = worker_id
         
         # 핵심 로직은 ImageProcessor로 이관
-        self.processor = ImageProcessor(device_id, log_callback=self.relay_log)
+        self.processor = ImageProcessor(device_id, log_callback=self.relay_log, preview_callback=self.relay_preview)
 
     def relay_log(self, msg):
         self.log_signal.emit(f"[Worker-{self.worker_id}] {msg}")
+
+    def relay_preview(self, img):
+        self.preview_signal.emit(img)
 
     def run(self):
         self.relay_log(f"Initialized on {self.device_id}")

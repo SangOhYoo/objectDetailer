@@ -12,9 +12,10 @@ from core.model_manager import ModelManager
 from core.face_restorer import FaceRestorer
 
 class ImageProcessor:
-    def __init__(self, device, log_callback=None):
+    def __init__(self, device, log_callback=None, preview_callback=None):
         self.device = device
         self.log_callback = log_callback
+        self.preview_callback = preview_callback
         self.model_manager = ModelManager(device)
         
         # Detectors
@@ -56,6 +57,8 @@ class ImageProcessor:
 
             try:
                 result_img = self._process_pass(result_img, config)
+                if self.preview_callback:
+                    self.preview_callback(result_img)
             finally:
                 self.model_manager.manage_lora(config, action="unload")
                 
@@ -165,25 +168,37 @@ class ImageProcessor:
             control_args["control_guidance_start"] = float(config.get('guidance_start', 0.0))
             control_args["control_guidance_end"] = float(config.get('guidance_end', 1.0))
 
+        # [Fix] Long Prompt Support (Token Chunking)
+        prompt_embeds, neg_prompt_embeds = self._get_long_prompt_embeds(
+            self.model_manager.pipe, config['pos_prompt'], config['neg_prompt']
+        )
+
         # Apply Scheduler & Seed
         self.model_manager.apply_scheduler(config.get('sampler_name', 'Euler a'))
         seed = config.get('seed', -1)
         generator = torch.Generator(self.device)
         if seed != -1: generator.manual_seed(seed)
 
+        infer_args = {
+            "image": pil_img,
+            "mask_image": pil_mask,
+            "strength": strength,
+            "width": new_w, "height": new_h,
+            "generator": generator,
+            **control_args
+        }
+        
+        if prompt_embeds is not None:
+            infer_args["prompt_embeds"] = prompt_embeds
+            infer_args["negative_prompt_embeds"] = neg_prompt_embeds
+        else:
+            infer_args["prompt"] = config['pos_prompt']
+            infer_args["negative_prompt"] = config['neg_prompt']
+
         # Inference
         with torch.inference_mode():
             with torch.autocast(self.device.split(':')[0]):
-                output = self.model_manager.pipe(
-                    prompt=config['pos_prompt'],
-                    negative_prompt=config['neg_prompt'],
-                    image=pil_img,
-                    mask_image=pil_mask,
-                    strength=strength,
-                    width=new_w, height=new_h,
-                    generator=generator,
-                    **control_args
-                ).images[0]
+                output = self.model_manager.pipe(**infer_args).images[0]
 
         # Paste Back (Alpha Blend)
         res_np = cv2.cvtColor(np.array(output), cv2.COLOR_RGB2BGR)
@@ -206,3 +221,38 @@ class ImageProcessor:
         ratio = ((x2 - x1) * (y2 - y1)) / (img_shape[0] * img_shape[1])
         adj = 0.15 if ratio < 0.05 else (0.10 if ratio < 0.10 else (0.05 if ratio < 0.20 else 0.0))
         return max(0.1, min(base + adj, 0.8))
+
+    def _get_long_prompt_embeds(self, pipe, prompt, negative_prompt):
+        """77토큰 제한을 우회하기 위한 임베딩 청킹(Chunking) 처리"""
+        if not prompt: prompt = ""
+        if not negative_prompt: negative_prompt = ""
+        
+        # 파이프라인에 토크나이저/인코더가 없는 경우
+        if not hasattr(pipe, "tokenizer") or not hasattr(pipe, "text_encoder"):
+            return None, None
+            
+        tokenizer = pipe.tokenizer
+        text_encoder = pipe.text_encoder
+        
+        if not tokenizer or not text_encoder:
+            return None, None
+
+        def encode_text(text):
+            tokens = tokenizer(text, truncation=False, add_special_tokens=False).input_ids
+            max_len = tokenizer.model_max_length - 2
+            
+            if len(tokens) == 0: chunks = [[]]
+            else: chunks = [tokens[i:i + max_len] for i in range(0, len(tokens), max_len)]
+            
+            embeds = []
+            pad_token = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
+            
+            for chunk in chunks:
+                input_ids = [tokenizer.bos_token_id] + chunk + [tokenizer.eos_token_id]
+                input_ids += [pad_token] * (tokenizer.model_max_length - len(input_ids))
+                input_tensor = torch.tensor([input_ids], device=self.device)
+                embeds.append(text_encoder(input_tensor)[0])
+            
+            return torch.cat(embeds, dim=1)
+
+        return encode_text(prompt), encode_text(negative_prompt)

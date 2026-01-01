@@ -11,3 +11,4 @@ segment-anything
 pyyaml
 huggingface-hub
 scipy
+gfpgan

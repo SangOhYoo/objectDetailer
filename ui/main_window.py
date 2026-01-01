@@ -5,7 +5,7 @@ import numpy as np
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QTabWidget, QLabel, QPushButton, QSplitter, 
                              QTextEdit, QComboBox, QGroupBox, QFileDialog, QSizePolicy,
-                             QMenu, QMessageBox)
+                             QMenu, QMessageBox, QProgressBar)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QActionGroup
 
@@ -173,6 +173,11 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 1)
 
+        # Progress Bar in Status Bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMaximumWidth(300)
+        self.progress_bar.setVisible(False)
+        self.statusBar().addPermanentWidget(self.progress_bar)
         self.statusBar().showMessage("[System] Initialized. Ready.")
 
     # --- Save Logic ---
@@ -293,6 +298,8 @@ class MainWindow(QMainWindow):
         self.log("Starting batch processing...")
         self.controller = ProcessingController(files, configs)
         self.controller.log_signal.connect(self.log)
+        self.controller.progress_signal.connect(self.update_progress)
+        self.controller.preview_signal.connect(self.update_preview)
         self.controller.result_signal.connect(self.handle_result)
         self.controller.start_processing()
 
@@ -301,6 +308,16 @@ class MainWindow(QMainWindow):
         self.sub_view.set_image(result_img)
         self.compare_view.pixmap_after = self.compare_view._np2pix(result_img)
         self.compare_view.update()
+
+    def update_progress(self, current, total):
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(current)
+        if current >= total:
+            self.progress_bar.setVisible(False)
+
+    def update_preview(self, img):
+        self.sub_view.set_image(img)
 
     def stop_processing(self):
         self.log("Stopping processing...")

@@ -22,6 +22,9 @@ class Detector:
             # [수정] 모델 로드 직후 해당 GPU로 이동
             self.model = YOLO(model_path)
             self.model.to(self.device_str)
+            # [Fix] Force float32 to match input type and prevent "float != half" errors
+            if hasattr(self.model, 'model') and hasattr(self.model.model, 'float'):
+                self.model.model.float()
         
         # 4채널(RGBA) 이미지를 3채널(BGR)로 변환
         if len(image.shape) == 3 and image.shape[2] == 4:

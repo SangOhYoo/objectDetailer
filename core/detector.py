@@ -50,28 +50,32 @@ class ObjectDetector:
         self.mp_face_mesh = None
         self.face_analysis = None
 
-    def detect(self, image: np.ndarray, model_name: str, conf: float = 0.3) -> list:
+    def detect(self, image: np.ndarray, model_name: str, conf: float = 0.3, classes: str = None) -> list:
         if "mediapipe" in model_name.lower():
             return self._detect_mediapipe(image, model_name)
         else:
-            return self._detect_yolo(image, model_name, conf)
+            return self._detect_yolo(image, model_name, conf, classes)
 
-    def _detect_yolo(self, image, model_name, conf):
+    def _detect_yolo(self, image, model_name, conf, classes=None):
         if model_name not in self.yolo_models:
             filename = model_name if model_name.endswith('.pt') else f"{model_name}.pt"
             model_path = os.path.join(self.model_dir, filename)
+            
+            # [New] External Path Support
+            ext_path = os.path.join(r"D:\AI_Models\adetailer", filename)
 
-            if not os.path.exists(model_path):
-                print(f"[Detector] Warning: Model not found at {model_path}. Using Ultralytics default.")
-                load_target = filename
-            else:
+            if os.path.exists(model_path):
                 load_target = model_path
+            elif os.path.exists(ext_path):
+                load_target = ext_path
+                print(f"[Detector] Found model in external path: {load_target}")
+            else:
+                print(f"[Detector] Warning: Model not found locally. Attempting auto-download/default: {filename}")
+                load_target = filename
 
             print(f"[Detector] Loading YOLO: {load_target}")
             
             # [Fix] Accelerate 'init_empty_weights' hook bypass using Thread
-            # Diffusers/Accelerate가 메인 스레드에 Meta Tensor Hook을 걸어두었을 가능성이 있으므로
-            # 별도 스레드에서 YOLO 모델을 로드하여 Hook을 회피합니다.
             def _load_yolo():
                 self.yolo_models[model_name] = YOLO(load_target, task='detect')
             
@@ -90,8 +94,40 @@ class ObjectDetector:
                 pass
         
         try:
+            # [New] YOLO World Custom Classes Support
+            # If classes string is provided (e.g., "cat, dog"), set them for YOLO World.
+            # Standard YOLO models typically use 'classes' arg as efficient class filtering by INDEX.
+            # But here we are dealing with Open Vocabulary names for World models.
+            target_classes_arg = None
+            
+            if classes and isinstance(classes, str) and classes.strip():
+                class_list = [c.strip() for c in classes.split(',') if c.strip()]
+                
+                if "world" in model_name.lower():
+                     # YOLO World: We MUST set classes in the model object to define the vocabulary
+                     # This persists in the model object!
+                     try:
+                         # Persist/Set custom vocabulary
+                         model.set_classes(class_list)
+                     except Exception as e:
+                         print(f"[Detector] Warning: Failed to set classes for YOLO World: {e}")
+                else:
+                    # Standard YOLO: 'classes' arg expects list of INT indices.
+                    # If user provided strings, we cannot easily map them unless we know the model's names.
+                    # Try to map names to indices
+                    try:
+                        valid_indices = []
+                        for cname in class_list:
+                            for idx, mname in model.names.items():
+                                if mname == cname:
+                                    valid_indices.append(idx)
+                        if valid_indices:
+                            target_classes_arg = valid_indices
+                    except:
+                        pass
+            
             with no_dispatch():
-                results = model.predict(image, conf=conf, device=device_arg, verbose=False)
+                results = model.predict(image, conf=conf, device=device_arg, verbose=False, classes=target_classes_arg)
         except (NotImplementedError, RuntimeError) as e:
             # [Fix] Meta tensor error handling (accelerate conflict)
             print(f"[Detector] Warning: Inference failed ({e}). Attempting CPU fallback for {model_name}.")
@@ -273,8 +309,140 @@ class ObjectDetector:
         faces = self.face_analysis.get(crop)
         if not faces: return None
         
-        # 가장 큰 얼굴 기준
-        face = max(faces, key=lambda x: (x.bbox[2]-x.bbox[0]) * (x.bbox[3]-x.bbox[1]))
+        # [Modified] 가장 큰 얼굴보다는 "중심에 있는 얼굴"이 YOLO가 검출한 타겟일 확률이 높음
+        # Crop의 중심점
+        ccx, ccy = (crop.shape[1] // 2, crop.shape[0] // 2)
         
-        # InsightFace Gender: 1=Male, 0=Female
-        return "Male" if face.gender == 1 else "Female"
+        def dist_from_center(f):
+            # 얼굴 중심
+            fcx = (f.bbox[0] + f.bbox[2]) / 2
+            fcy = (f.bbox[1] + f.bbox[3]) / 2
+            return (fcx - ccx)**2 + (fcy - ccy)**2
+
+        # 중심점과의 거리가 가장 가까운 얼굴 선택
+        face = min(faces, key=dist_from_center)
+        
+        # [Debug] 성별/나이 로그 (디버깅용)
+        gender_str = "Male" if face.gender == 1 else "Female"
+        # print(f"[Detector] Gender: {gender_str}, Age: {face.age}, Box: {face.bbox}") # 필요 시 주석 해제
+
+        return gender_str
+
+    def analyze_body_gender(self, image, box):
+        """
+        [New] MediaPipe Pose를 사용하여 신체 비율(어깨 vs 골반)로 성별을 추정합니다.
+        얼굴이 보이지 않거나(뒷모습), InsightFace가 실패했을 때 사용됩니다.
+        """
+        if not HAS_MEDIAPIPE: return None
+
+        # Lazy Loading
+        if not hasattr(self, 'mp_pose') or self.mp_pose is None:
+            self.mp_pose = mp.solutions.pose.Pose(
+                static_image_mode=True, 
+                model_complexity=1, 
+                enable_segmentation=False, 
+                min_detection_confidence=0.5
+            )
+
+        h, w = image.shape[:2]
+        x1, y1, x2, y2 = map(int, box)
+        
+        # 박스보다 약간 넓게 크롭해야 어깨선이 잘 보임
+        pad_x = int((x2 - x1) * 0.3)
+        pad_y = int((y2 - y1) * 0.2)
+        cx1, cy1 = max(0, x1 - pad_x), max(0, y1 - pad_y)
+        cx2, cy2 = min(w, x2 + pad_x), min(h, y2 + pad_y)
+        
+        crop = image[cy1:cy2, cx1:cx2]
+        if crop.size == 0: return None
+        
+        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        results = self.mp_pose.process(rgb)
+        
+        if not results.pose_landmarks: return None
+        
+        lm = results.pose_landmarks.landmark
+        
+        # 11: left_shoulder, 12: right_shoulder, 23: left_hip, 24: right_hip
+        l_sh = lm[11]
+        r_sh = lm[12]
+        l_hip = lm[23]
+        r_hip = lm[24]
+        
+        # 신뢰도 체크
+        if min(l_sh.visibility, r_sh.visibility, l_hip.visibility, r_hip.visibility) < 0.5:
+            return None # 신체가 제대로 보이지 않음
+
+        # [Revised] 너비 계산 (Geometric - Euclidean Distance)
+        # 기존 절대 좌표 차이는 회전된 신체에서 오류 발생. 유클리드 거리 사용.
+        shoulder_dist = np.linalg.norm(np.array([l_sh.x, l_sh.y]) - np.array([r_sh.x, r_sh.y]))
+        hip_dist = np.linalg.norm(np.array([l_hip.x, l_hip.y]) - np.array([r_hip.x, r_hip.y]))
+        
+        if shoulder_dist == 0: return None
+        
+        ratio = hip_dist / shoulder_dist
+        
+        # Heuristic Threshold
+        # 골반이 어깨 너비의 75% 이상이면 여성일 확률이 높음 (옷 등에 따라 다를 수 있음)
+        estimated_gender = "Female" if ratio > 0.75 else "Male"
+        
+        # print(f"[Detector] Body Analysis - Ratio: {ratio:.2f} ({hip_dist:.2f}/{shoulder_dist:.2f}) -> {estimated_gender}")
+        
+        return estimated_gender
+
+    def detect_pose(self, image: np.ndarray, conf: float = 0.3) -> list:
+        """
+        Detect body pose keypoints using yolov8n-pose.pt.
+        Returns list of {box, keypoints} dicts.
+        Keypoints format: [ [x,y,conf], ... 17 points ]
+        """
+        model_name = "yolo11n-pose.pt"
+        if model_name not in self.yolo_models:
+             filename = model_name
+             model_path = os.path.join(self.model_dir, filename)
+             # [New] Check External Path for Pose Model
+             ext_path = os.path.join(r"D:\AI_Models\adetailer", filename)
+             
+             if os.path.exists(model_path):
+                 load_target = model_path
+             elif os.path.exists(ext_path):
+                 load_target = ext_path
+                 print(f"[Detector] Found Pose model in external path: {load_target}")
+             else:
+                 print(f"[Detector] Pose model not found, downloading {model_name}...")
+                 load_target = model_name # Auto download by Ultralytics
+
+             # Load in thread to bypass accelerate hook issues
+             def _load_pose():
+                self.yolo_models[model_name] = YOLO(load_target)
+             t = threading.Thread(target=_load_pose)
+             t.start()
+             t.join()
+        
+        model = self.yolo_models[model_name]
+        
+        try:
+            with no_dispatch():
+                results = model.predict(image, conf=conf, verbose=False, device=self.device)
+        except Exception as e:
+            print(f"[Detector] Pose Detection failed: {e}")
+            return []
+        
+        poses = []
+        for r in results:
+            if r.keypoints is None: continue
+            
+            # r.boxes contains bbox for each person
+            # r.keypoints contains keypoints
+            
+            boxes = r.boxes.xyxy.cpu().numpy()
+            kps_all = r.keypoints.data.cpu().numpy() # (N, 17, 3) -> x,y,conf
+            
+            for i, box in enumerate(boxes):
+                x1, y1, x2, y2 = box
+                kps = kps_all[i]
+                poses.append({
+                    'box': [int(x1), int(y1), int(x2), int(y2)],
+                    'keypoints': kps
+                })
+        return poses

@@ -87,14 +87,16 @@ ui_settings:
   패스 2:
     enabled: true
     detector_model: Anzhcs ManFace v02 1024 y8n.pt
+    yolo_classes: ''
     use_sam: false
     auto_prompt_injection: true
-    gender_filter: All
+    gender_filter: Male
     ignore_edge_touching: false
     anatomy_check: true
+    use_pose_rotation: true
     auto_rotate: true
-    color_fix: None
-    use_hires_fix: true
+    color_fix: Adain
+    use_hires_fix: false
     pos_prompt: '(masterpiece), (best quality), (high resolution), (photorealistic),
       [<lora:sangoh-10:0.7>:(21 years old asian boy:0.2)], pale skin, (glossy skin:1.1),
       looking at another, (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed,
@@ -181,11 +183,13 @@ ui_settings:
     use_controlnet: false
     control_model: None
     control_module: None
-    sep_noise: true
+    sep_noise: false
     inpaint_width: 512
     inpaint_height: 512
     use_noise_mask: false
-    mask_merge_mode: false
+    mask_merge_mode: None
+    resize_enable: false
+    resize_align: Center
     sep_ckpt: true
     sep_ckpt_name: henmix_real_v6b-fp16-no-ema.safetensors
     sep_vae: true
@@ -198,7 +202,7 @@ ui_settings:
     cfg_scale: 7.0
     sep_clip: true
     clip_skip: 2
-    restore_face: true
+    restore_face: false
     conf_thresh: 0.3
     min_face_ratio: 0.0
     max_face_ratio: 1.0
@@ -207,25 +211,35 @@ ui_settings:
     mask_blur: 12
     x_offset: 0
     y_offset: 0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     denoising_strength: 0.4
+    context_expand_factor: 1.0
     crop_padding: 32
     control_weight: 1.0
     guidance_start: 0.0
     guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_temp: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
     seed: -1
   패스 3:
     enabled: true
     detector_model: Anzhcs WomanFace v05 1024 y8n.pt
+    yolo_classes: ''
     use_sam: false
     auto_prompt_injection: true
-    gender_filter: All
+    gender_filter: Female
     ignore_edge_touching: false
     anatomy_check: true
+    use_pose_rotation: true
     auto_rotate: true
     color_fix: Adain
     use_hires_fix: false
@@ -1182,7 +1196,7 @@ ui_settings:
       parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP]'
     neg_prompt: (worst quality, low quality, normal quality, lowres, bokeh, blur:2.0),
       (polydactyly, polydactylism:2.0)
-    max_det: 10
+    max_det: 1
     sort_method: 신뢰도
     use_controlnet: false
     control_model: None
@@ -1191,7 +1205,9 @@ ui_settings:
     inpaint_width: 512
     inpaint_height: 512
     use_noise_mask: false
-    mask_merge_mode: false
+    mask_merge_mode: None
+    resize_enable: false
+    resize_align: Center
     sep_ckpt: true
     sep_ckpt_name: henmix_real_v6b-fp16-no-ema.safetensors
     sep_vae: true
@@ -1213,16 +1229,24 @@ ui_settings:
     mask_blur: 12
     x_offset: 0
     y_offset: 0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
     denoising_strength: 0.4
+    context_expand_factor: 1.0
     crop_padding: 32
     control_weight: 1.0
     guidance_start: 0.0
     guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_temp: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
     seed: -1
   패스 4:
     enabled: false
@@ -1563,12 +1587,14 @@ ui_settings:
     seed: -1
   패스 9:
     enabled: false
-    detector_model: Anzhc Face -seg.pt
+    detector_model: Anzhc Eyes -seg-hd.pt
+    yolo_classes: ''
     use_sam: false
     auto_prompt_injection: true
     gender_filter: All
     ignore_edge_touching: false
     anatomy_check: false
+    use_pose_rotation: false
     auto_rotate: false
     color_fix: None
     use_hires_fix: false
@@ -1583,10 +1609,12 @@ ui_settings:
     control_model: None
     control_module: inpaint_global_harmonious
     sep_noise: false
-    inpaint_width: 1024
-    inpaint_height: 1024
+    inpaint_width: 512
+    inpaint_height: 512
     use_noise_mask: false
-    mask_merge_mode: false
+    mask_merge_mode: None
+    resize_enable: false
+    resize_align: Center
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
@@ -1603,21 +1631,29 @@ ui_settings:
     conf_thresh: 0.35
     min_face_ratio: 0.01
     max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
     x_offset: 0
     y_offset: 0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
+    denoising_strength: 0.4
+    context_expand_factor: 1.0
+    crop_padding: 32
     control_weight: 1.0
     guidance_start: 0.0
     guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_temp: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
     seed: -1
   패스 10:
     enabled: false

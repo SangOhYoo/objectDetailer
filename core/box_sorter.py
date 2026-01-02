@@ -38,6 +38,10 @@ def sort_boxes(boxes, scores, method, image_width, image_height):
         distances = (box_cx - img_cx)**2 + (box_cy - img_cy)**2
         sort_idx = np.argsort(distances)
 
+    elif method == "위치(위에서 아래)": # [New]
+        # y1 좌표 기준 오름차순 정렬
+        sort_idx = np.argsort(boxes[:, 1])
+
     elif method == "영역 (대형에서 소형)":
         # 면적 계산: (x2 - x1) * (y2 - y1)
         areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])

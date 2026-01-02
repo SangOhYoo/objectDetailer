@@ -18,7 +18,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Standalone ADetailer - Dual GPU Edition")
-        self.resize(2390, 1810) # 기본 사이즈
+        self.resize(1600, 1000) # 기본 사이즈 (HD+)
         
         self.controller = None
         
@@ -201,8 +201,8 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(0, 4)
         self.splitter.setStretchFactor(1, 6)
         
-        # [Fix] 초기 실행 시 40:60 비율 강제 적용 (2390px 기준 956:1434)
-        self.splitter.setSizes([956, 1434])
+        # [Fix] 좌측 패널 30% 축소 요청 (1600px 기준 480:1120)
+        self.splitter.setSizes([480, 1120])
 
         # Progress Bar in Status Bar
         self.progress_bar = QProgressBar()
@@ -295,9 +295,42 @@ class MainWindow(QMainWindow):
             QSplitter::handle { background-color: #444; width: 4px; }
             QGroupBox { border: 1px solid #555; margin-top: 15px; border-radius: 4px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #4dabf7; font-weight: bold; }
-            QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox { 
-                background-color: #333; border: 1px solid #555; padding: 4px; border-radius: 3px; color: #eee;
+            QLineEdit, QTextEdit, QComboBox { 
+                background-color: #333; border: 1px solid #666; padding: 4px; border-radius: 3px; color: #eee;
             }
+            QSpinBox, QDoubleSpinBox {
+                background-color: #333; border: 1px solid #666; padding: 2px; border-radius: 3px; color: #eee;
+            }
+            QSpinBox::up-button, QDoubleSpinBox::up-button {
+                subcontrol-origin: border; subcontrol-position: top right; width: 24px;
+                background-color: #555; border-left: 1px solid #777; border-bottom: 1px solid #777;
+                border-top-right-radius: 3px; margin: 0px;
+            }
+            QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover { background-color: #666; }
+            QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed { background-color: #444; }
+
+            QSpinBox::down-button, QDoubleSpinBox::down-button {
+                subcontrol-origin: border; subcontrol-position: bottom right; width: 24px;
+                background-color: #555; border-left: 1px solid #777; border-top: 1px solid #777;
+                border-bottom-right-radius: 3px; margin: 0px;
+            }
+            QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover { background-color: #666; }
+            QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed { background-color: #444; }
+
+            QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+                width: 0px; height: 0px;
+                border-left: 5px solid transparent; border-right: 5px solid transparent;
+                border-bottom: 6px solid #fff;
+            }
+            QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+                width: 0px; height: 0px;
+                border-left: 5px solid transparent; border-right: 5px solid transparent;
+                border-top: 6px solid #fff;
+            }
+            /* [New] Colored Borders for Prompts */
+            QTextEdit#pos_prompt { border: 2px solid #4dabf7; background-color: #263238; }
+            QTextEdit#neg_prompt { border: 2px solid #e74c3c; background-color: #3e2723; }
+            QTextEdit#yolo_classes { border: 1px solid #9b59b6; }
             QRadioButton { spacing: 5px; color: #eeeeee; }
             QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 2px solid #666; background-color: #333; }
             QRadioButton::indicator:checked { background-color: #4dabf7; border-color: #4dabf7; }
@@ -319,9 +352,42 @@ class MainWindow(QMainWindow):
             QSplitter::handle { background-color: #ccc; width: 4px; }
             QGroupBox { border: 1px solid #cccccc; margin-top: 15px; border-radius: 4px; background-color: #ffffff; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #0056b3; font-weight: bold; }
-            QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox { 
-                background-color: #ffffff; border: 1px solid #cccccc; padding: 4px; border-radius: 3px; color: #333;
+            QLineEdit, QTextEdit, QComboBox { 
+                background-color: #ffffff; border: 1px solid #999; padding: 4px; border-radius: 3px; color: #333;
             }
+            QSpinBox, QDoubleSpinBox {
+                background-color: #ffffff; border: 1px solid #999; padding: 2px; border-radius: 3px; color: #333;
+            }
+            QSpinBox::up-button, QDoubleSpinBox::up-button {
+                subcontrol-origin: border; subcontrol-position: top right; width: 24px;
+                background-color: #eee; border-left: 1px solid #ccc; border-bottom: 1px solid #ccc;
+                border-top-right-radius: 3px; margin: 0px;
+            }
+            QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover { background-color: #ddd; }
+            QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed { background-color: #ccc; }
+
+            QSpinBox::down-button, QDoubleSpinBox::down-button {
+                subcontrol-origin: border; subcontrol-position: bottom right; width: 24px;
+                background-color: #eee; border-left: 1px solid #ccc; border-top: 1px solid #ccc;
+                border-bottom-right-radius: 3px; margin: 0px;
+            }
+            QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover { background-color: #ddd; }
+            QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed { background-color: #ccc; }
+
+            QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+                width: 0px; height: 0px;
+                border-left: 5px solid transparent; border-right: 5px solid transparent;
+                border-bottom: 6px solid #333;
+            }
+            QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+                width: 0px; height: 0px;
+                border-left: 5px solid transparent; border-right: 5px solid transparent;
+                border-top: 6px solid #333;
+            }
+            /* [New] Colored Borders for Prompts (Light Mode) */
+            QTextEdit#pos_prompt { border: 2px solid #2980b9; background-color: #eaf2f8; }
+            QTextEdit#neg_prompt { border: 2px solid #c0392b; background-color: #f9ebea; }
+            QTextEdit#yolo_classes { border: 1px solid #8e44ad; }
             QRadioButton { spacing: 5px; color: #333333; }
             QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 2px solid #999; background-color: #fff; }
             QRadioButton::indicator:checked { background-color: #0078d7; border-color: #0078d7; }

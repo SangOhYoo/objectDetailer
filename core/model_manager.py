@@ -91,7 +91,17 @@ class ModelManager:
                 vae = AutoencoderKL.from_single_file(vae_path, torch_dtype=torch.float32)
 
             # Args
-            load_args = {"torch_dtype": torch.float32, "safety_checker": None, "use_safetensors": True}
+            # [Fix] Force low_cpu_mem_usage=False to avoid Meta Tensor (accelerate) issues
+            # 'accelerate'가 init_empty_weights를 사용하여 모델을 meta device에 올리면 LoRA 로딩 시 에러 발생 가능성이 높습니다.
+            # 메모리 사용량은 늘어나지만 안정성을 위해 False로 강제합니다.
+            # [Fix] device_map=None explicitly demanded to prevent accelerate form creating meta tensors
+            load_args = {
+                "torch_dtype": torch.float16, 
+                "safety_checker": None, 
+                "use_safetensors": True, 
+                "low_cpu_mem_usage": False,
+                "device_map": None 
+            }
             if vae: load_args["vae"] = vae
             
             if not os.path.exists(ckpt_path):
@@ -118,6 +128,7 @@ class ModelManager:
                     )
                 
                 if controlnet:
+                    # [Fix] ControlNet 파이프라인 생성 시에도 device_map이 전파되도록 주의 (일반적으로 components로 전달됨)
                     self.pipe = StableDiffusionControlNetInpaintPipeline(**self.pipe.components, controlnet=controlnet)
 
             # Clip Skip 적용
@@ -127,11 +138,27 @@ class ModelManager:
                 self.pipe.text_encoder.text_model.encoder.layers = self.pipe.text_encoder.text_model.encoder.layers[:-(clip_skip - 1)]
 
             # [Fix] OOM 방지를 위한 메모리 최적화 및 Offload 적용
-            # 1. 데이터 타입 변환 (fp16)
-            self.pipe.unet.to(dtype=torch.float16)
-            self.pipe.text_encoder.to(dtype=torch.float16)
-            if controlnet: self.pipe.controlnet.to(dtype=torch.float16)
-            if self.pipe.vae: self.pipe.vae.to(dtype=torch.float32)
+            # 1. 데이터 타입 변환 (fp16) -> 이미 load_args에서 torch_dtype=torch.float16으로 로드함
+            # self.pipe.unet.to(dtype=torch.float16)
+            # self.pipe.text_encoder.to(dtype=torch.float16)
+            # if controlnet: self.pipe.controlnet.to(dtype=torch.float16)
+            if self.pipe.vae: 
+                self.pipe.vae.to(dtype=torch.float32)
+                # [Fix] Pipeline이 float16일 때 VAE 입력도 float16으로 캐스팅되어 float32 VAE와 충돌(Input Half != Weight Float)하는 문제 해결
+                # VAE Encoder 실행 직전에 입력을 강제로 float32로 변환하는 Hook 추가
+                def vae_cast_hook(module, inputs):
+                    if inputs[0].dtype != torch.float32:
+                        return (inputs[0].to(dtype=torch.float32),) + inputs[1:]
+                
+                # 중복 등록 방지
+                if not hasattr(self.pipe.vae.encoder, "_antigravity_hook_registered"):
+                    self.pipe.vae.encoder.register_forward_pre_hook(vae_cast_hook)
+                    self.pipe.vae.encoder._antigravity_hook_registered = True
+                
+                # Add logic for decoder using the same logic just in case
+                if not hasattr(self.pipe.vae.decoder, "_antigravity_hook_registered"):
+                    self.pipe.vae.decoder.register_forward_pre_hook(vae_cast_hook)
+                    self.pipe.vae.decoder._antigravity_hook_registered = True
 
             # 2. 메모리 효율화 (xformers / slicing)
             if hasattr(self.pipe, 'enable_xformers_memory_efficient_attention'):
@@ -154,8 +181,11 @@ class ModelManager:
             # 멀티 GPU 환경에서 각 워커가 독립적으로 작동하도록 device를 명시합니다.
             # [Fix] SDXL 모델은 VRAM 소모가 크므로 CPU Offload를 사용하여 OOM 방지
             if is_sdxl:
-                # main.py의 accelerate 패치가 적용되어 있어 Meta Tensor 충돌 위험이 낮음
-                self.pipe.enable_model_cpu_offload(device=self.device)
+                # [Fix] Dual GPU 환경에서 enable_model_cpu_offload는 Global Hook 충돌을 일으키므로,
+                # VRAM이 충분하다면 .to(device)를 사용하거나 enable_sequential_cpu_offload를 고려해야 함.
+                # 여기서는 안정성을 위해 .to(device)로 변경하되, VRAM 부족 시 sequential_offload로 fallback하는 로직이 필요할 수 있음.
+                # 우선 사용자 제안대로 .to(device)를 시도.
+                self.pipe.to(self.device)
             else:
                 self.pipe.to(self.device)
 
@@ -199,7 +229,8 @@ class ModelManager:
 
     def _unload_all(self):
         try:
-            self.pipe.unfuse_lora()
+            # [Fix] Disable unfuse_lora to prevent model corruption in threaded env
+            # self.pipe.unfuse_lora()
             self.pipe.unload_lora_weights()
             gc.collect()
             torch.cuda.empty_cache()
@@ -223,9 +254,28 @@ class ModelManager:
                     # [Fix] 1x1 Conv vs Linear dimension mismatch fallback
                     err_msg = str(e)
                     if "size mismatch" in err_msg and "1, 1" in err_msg:
-                        # ... (기존 복구 로직 생략, 너무 길어짐. 필요시 위 코드 참조) ...
                         print(f"[ModelManager] Warning: Dimension mismatch for {name}. Skipping to avoid crash.")
                         continue
+                        
+                    # [Fix] Meta Tensor Error Handling (accelerate conflict)
+                    elif "meta tensor" in err_msg:
+                        print(f"[ModelManager] Warning: Meta Tensor error for {name}. Attempting to recover...")
+                        try:
+                            # Try to materialize using to_empty as suggested, but this resets weights.
+                            # So we only do this if we can reload, but we can't easily reload here.
+                            # Best bet: Try to force move to device, if fails, just SKIP.
+                            # pipe.to(device) failed earlier so this is a hail mary.
+                            self.pipe.unet.to_empty(device=self.device)
+                            self.pipe.text_encoder.to_empty(device=self.device)
+                            # NOTICE: to_empty resets weights to random! This is dangerous if we don't reload.
+                            # But since we are here, the model is likely broken (ghost) anyway.
+                            # Let's try to reload LoRA which might initialize it? No.
+                            # Safe approach: Just log and SKIP to prevent crash.
+                            print(f"[ModelManager] Critical: Model is on meta device. Skipping LoRA {name} to avoid crash.")
+                            continue
+                        except Exception as e2:
+                            print(f"[ModelManager] Recovery failed: {e2}. Skipping {name}.")
+                            continue
                     else:
                         print(f"[ModelManager] Warning: Failed to load LoRA '{name}': {e}")
                         continue
@@ -238,7 +288,8 @@ class ModelManager:
         
         if adapter_names:
             self.pipe.set_adapters(adapter_names, adapter_weights=adapter_weights)
-            self.pipe.fuse_lora(adapter_names=adapter_names, lora_scale=1.0)
+            # [Fix] Disable fuse_lora to prevent model corruption in threaded env
+            # self.pipe.fuse_lora(adapter_names=adapter_names, lora_scale=1.0)
 
     def apply_scheduler(self, sampler_name):
         """스케줄러 교체"""

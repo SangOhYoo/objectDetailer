@@ -181,12 +181,7 @@ class AdetailerUnitWidget(QWidget):
         self.chk_pose_rotation.setStyleSheet("color: #8e44ad; font-weight: bold;")
 
         l_det.addWidget(QLabel("성별:"), 0, 0)
-        l_det.addWidget(self.combo_gender, 0, 1)
-        sub_layout = QHBoxLayout()
-        sub_layout.addWidget(self.chk_ignore_edge)
-        sub_layout.addWidget(self.chk_anatomy)
-        sub_layout.addWidget(self.chk_pose_rotation)
-        l_det.addLayout(sub_layout, 0, 2, 1, 2)
+        l_det.addWidget(self.combo_gender, 0, 1, 1, 3) # Span 3 columns
         
         # Sliders
         self.add_slider_row(l_det, 1, "신뢰도:", "conf_thresh", 0.0, 1.0, 0.35, 0.01)
@@ -199,29 +194,55 @@ class AdetailerUnitWidget(QWidget):
         self.spin_top_k.setValue(self.saved_config.get('max_det', 20))
         l_det.addWidget(self.spin_top_k, 4, 1)
         
-        # Sort Radios
-        l_det.addWidget(QLabel("정렬:"), 5, 0)
+        # [Unified Bottom Section: Single Row for Sort & Checkboxes]
+        from PyQt6.QtWidgets import QFrame
+        
+        l_bottom_row = QHBoxLayout()
+        l_bottom_row.setContentsMargins(0, 10, 0, 0)
+        l_bottom_row.setSpacing(10)
+
+        # 1. Sort Controls (Left)
+        l_bottom_row.addWidget(QLabel("정렬:"))
+        
         self.bg_sort = QButtonGroup(self)
         self.radio_sort_lr = QRadioButton("좌→우"); self.bg_sort.addButton(self.radio_sort_lr)
         self.radio_sort_center = QRadioButton("중앙"); self.bg_sort.addButton(self.radio_sort_center)
         self.radio_sort_area = QRadioButton("크기"); self.bg_sort.addButton(self.radio_sort_area)
-        self.radio_sort_tb = QRadioButton("위→아래"); self.bg_sort.addButton(self.radio_sort_tb) # [New]
+        self.radio_sort_tb = QRadioButton("위→아래"); self.bg_sort.addButton(self.radio_sort_tb) 
         self.radio_sort_conf = QRadioButton("신뢰도"); self.bg_sort.addButton(self.radio_sort_conf)
         
         saved_sort = self.saved_config.get('sort_method', '신뢰도')
         if '좌' in saved_sort: self.radio_sort_lr.setChecked(True)
         elif '중앙' in saved_sort: self.radio_sort_center.setChecked(True)
         elif '영역' in saved_sort: self.radio_sort_area.setChecked(True)
-        elif '위' in saved_sort: self.radio_sort_tb.setChecked(True) # [New]
+        elif '위' in saved_sort: self.radio_sort_tb.setChecked(True)
         else: self.radio_sort_conf.setChecked(True)
         
-        l_sort = QHBoxLayout()
-        l_sort.addWidget(self.radio_sort_lr)
-        l_sort.addWidget(self.radio_sort_center)
-        l_sort.addWidget(self.radio_sort_area)
-        l_sort.addWidget(self.radio_sort_tb) # [New]
-        l_sort.addWidget(self.radio_sort_conf)
-        l_det.addLayout(l_sort, 5, 1, 1, 3)
+        radio_style = "QRadioButton { font-size: 12px; padding: 2px; }"
+        for r in [self.radio_sort_lr, self.radio_sort_center, self.radio_sort_area, self.radio_sort_tb, self.radio_sort_conf]:
+            r.setStyleSheet(radio_style)
+            l_bottom_row.addWidget(r)
+            
+        # 2. Vertical Separator
+        v_line = QFrame()
+        v_line.setFrameShape(QFrame.Shape.VLine)
+        v_line.setFrameShadow(QFrame.Shadow.Sunken)
+        l_bottom_row.addWidget(v_line)
+        
+        # 3. Checkboxes (Right)
+        chk_style = "QCheckBox { font-size: 13px; padding: 5px; }"
+        self.chk_ignore_edge.setStyleSheet(chk_style)
+        self.chk_anatomy.setStyleSheet(chk_style)
+        self.chk_pose_rotation.setStyleSheet(chk_style + " color: #8e44ad; font-weight: bold;")
+        
+        l_bottom_row.addWidget(self.chk_ignore_edge)
+        l_bottom_row.addWidget(self.chk_anatomy)
+        l_bottom_row.addWidget(self.chk_pose_rotation)
+        
+        l_bottom_row.addStretch()
+
+        # Add Combined Single Row to Grid (Row 5, Span 4)
+        l_det.addLayout(l_bottom_row, 5, 0, 1, 4)
         g_det.setLayout(l_det)
         t1_layout.addWidget(g_det)
         

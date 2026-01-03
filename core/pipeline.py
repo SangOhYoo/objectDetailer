@@ -235,69 +235,25 @@ class ImageProcessor:
         
         detections = self.detector.detect(image, config['detector_model'], config['conf_thresh'], classes=config.get('yolo_classes'))
         
-        # [New] Face Recovery from Pose
-        # If Pose Rotation is enabled, we use Pose to find faces that standard detector missed.
-        # This is CRITICAL for upside-down or sideways faces which YOLO-Face fails on.
+        image_copy = image.copy()
+        for i, det in enumerate(detections):
+             box = det['box']
+             score = det.get('conf', 0.0)
+             
+             # ... (Mask Generation / Prediction Logic) ...
+             
+             # Pass score to draw_mask_on_image
+             # mask_vis = draw_mask_on_image(final_img, mask, color=(0, 255, 0), box=box, text=f"{score:.2f}")
+
+        # [Disabled] Face Recovery from Pose
+        # User requested to remove "artificial" detections.
+        """
         if config.get('use_pose_rotation', False):
              try:
-                 # Run Pose Detection
-                 poses = self.detector.detect_pose(image)
-                 self._cached_poses = poses # Cache for later rotation use
-                 self._cached_poses_img_id = id(image)
-                 
-                 for p in poses:
-                     kp = p['keypoints'] # [17, 3]
-                     # Keypoints: 0:Nose, 1:LEye, 2:REye, 3:LEar, 4:REar
-                     # If these exist, we have a head.
-                     
-                     # Check if Head KPs are present (Confidence > 0.5)
-                     head_kps = []
-                     for i in range(5):
-                         if kp[i][2] > 0.5:
-                             head_kps.append(kp[i][:2])
-                     
-                     if len(head_kps) >= 2: # At least 2 points (e.g. Eyes or Eye+Nose)
-                         # Calculate Bounding Box from Head KPs
-                         head_kps = np.array(head_kps)
-                         x_min, y_min = np.min(head_kps, axis=0)
-                         x_max, y_max = np.max(head_kps, axis=0)
-                         
-                         w_box = x_max - x_min
-                         h_box = y_max - y_min
-                         
-                         # Pad the box (Face is larger than just eyes/nose)
-                         # Heuristic: Double the size
-                         pad_x = w_box * 0.5
-                         pad_y = h_box * 0.5
-                         
-                         nx1 = max(0, int(x_min - pad_x))
-                         ny1 = max(0, int(y_min - pad_y))
-                         nx2 = min(w, int(x_max + pad_x))
-                         ny2 = min(h, int(y_max + pad_y))
-                         
-                         # Overlap Check with Existing Detections (IoU)
-                         is_new = True
-                         new_area = (nx2-nx1)*(ny2-ny1)
-                         cx, cy = (nx1+nx2)/2, (ny1+ny2)/2
-                         
-                         for d in detections:
-                             dx1, dy1, dx2, dy2 = d['box']
-                             # Check if Center of New Box is inside Existing Box
-                             if dx1 < cx < dx2 and dy1 < cy < dy2:
-                                 is_new = False
-                                 break
-                                 
-                         if is_new:
-                             self.log(f"    [Pose] Recovered Face from Pose: {nx1},{ny1},{nx2},{ny2}")
-                             detections.append({
-                                 'box': [nx1, ny1, nx2, ny2],
-                                 'conf': float(np.mean([k[2] for k in kp[:5] if k[2]>0.5])), # Avg Conf of Head KPs
-                                 'label': 'face_recovered',
-                                 'mask': None
-                             })
-
+                 # ... (Pose Logic Removed/Commented) ...
              except Exception as e:
                  self.log(f"    [Warning] Pose Face Recovery failed: {e}")
+        """
 
         if not detections:
             self.log(f"    [Info] No objects detected (Threshold: {config['conf_thresh']}).")
@@ -541,7 +497,10 @@ class ImageProcessor:
 
             # [Single Mode Logic] -> Run Inpaint immediately
             if self.preview_callback:
-                mask_vis = draw_mask_on_image(final_img, mask, color=(0, 255, 0))
+                # [Fix] Pass 'box' to ensure the detection box is visible during mask preview
+                score_val = det.get('conf')
+                score_text = f"{score_val:.2f}" if score_val is not None else None
+                mask_vis = draw_mask_on_image(final_img, mask, color=(0, 255, 0), box=box, text=score_text)
                 self.preview_callback(mask_vis)
             
             # [Delayed Gender Check]

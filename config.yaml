@@ -90,11 +90,11 @@ ui_settings:
     yolo_classes: ''
     use_sam: false
     auto_prompt_injection: true
-    gender_filter: Male
+    gender_filter: All
     ignore_edge_touching: false
-    anatomy_check: true
-    use_pose_rotation: true
-    auto_rotate: true
+    anatomy_check: false
+    use_pose_rotation: false
+    auto_rotate: false
     color_fix: Adain
     use_hires_fix: false
     pos_prompt: '(masterpiece), (best quality), (high resolution), (photorealistic),
@@ -236,11 +236,11 @@ ui_settings:
     yolo_classes: ''
     use_sam: false
     auto_prompt_injection: true
-    gender_filter: Female
+    gender_filter: All
     ignore_edge_touching: false
-    anatomy_check: true
-    use_pose_rotation: true
-    auto_rotate: true
+    anatomy_check: false
+    use_pose_rotation: false
+    auto_rotate: false
     color_fix: Adain
     use_hires_fix: false
     pos_prompt: '(masterpiece), (best quality), (high resolution), (photorealistic),

@@ -189,6 +189,14 @@ class ObjectDetector:
                     det['mask'] = (raw_mask > 0.5).astype(np.uint8) * 255
 
                 detections.append(det)
+
+        # [Debug] Log detections
+        print(f"[Detector] Model: {model_name} | Detected: {len(detections)} objects")
+        for i, det in enumerate(detections):
+            class_name = str(det['label'])
+            if hasattr(model, 'names') and det['label'] in model.names:
+                class_name = model.names[det['label']]
+            print(f"  - [{i+1}] Class: {class_name} ({det['label']}), Conf: {det['conf']:.4f}, Box: {det['box']}")
         
         return detections
 

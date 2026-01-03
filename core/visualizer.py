@@ -92,9 +92,11 @@ def draw_detections(image, detections):
         
     return vis_img
 
-def draw_mask_on_image(image, mask, color=(0, 255, 0), alpha=0.4):
+def draw_mask_on_image(image, mask, color=(0, 255, 0), alpha=0.4, box=None, text=None):
     """
     단일 마스크를 이미지 위에 오버레이합니다. (실시간 처리 확인용)
+    box: Optional [x1, y1, x2, y2] to draw bounding box
+    text: Optional string to draw above the box (e.g., confidence score)
     """
     vis = image.copy()
     overlay = vis.copy()
@@ -120,5 +122,33 @@ def draw_mask_on_image(image, mask, color=(0, 255, 0), alpha=0.4):
         cv2.drawContours(vis, contours, -1, color, 2)
     except Exception:
         pass
+        
+    # [New] Draw Box & Text if provided
+    if box is not None:
+        try:
+            x1, y1, x2, y2 = map(int, box)
+            cv2.rectangle(vis, (x1, y1), (x2, y2), color, 2)
+            
+            if text:
+                # Draw Text Background
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.5
+                thickness = 1
+                (text_w, text_h), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+                
+                # Text Position (Inside Box or Above Box)
+                # Ensure it doesn't go off-screen
+                y_text = y1 - 5 if y1 - 5 > 15 else y1 + 15
+                
+                cv2.rectangle(vis, (x1, y_text - text_h - 2), (x1 + text_w, y_text + baseline), color, -1) # Filled BG
+                
+                # Determine text color (black or white) based on bg brightness
+                # Since 'color' is usually green (0,255,0), black text is good.
+                text_color = (0, 0, 0)
+                
+                cv2.putText(vis, text, (x1, y_text), font, font_scale, text_color, thickness, cv2.LINE_AA)
+                
+        except Exception:
+            pass
         
     return vis

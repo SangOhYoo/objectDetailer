@@ -26,7 +26,6 @@ class MainWindow(QMainWindow):
         self.preview_processor = None # [New] For quick detection preview
         
         self.init_ui()
-        self.init_ui()
         
         # [Fix] Theme Initialization (Load from Config)
         self.current_theme = "light" # Default
@@ -37,6 +36,7 @@ class MainWindow(QMainWindow):
         # [Menu Bar] 파일 메뉴 & 테마 메뉴
         # ============================================================
         menubar = self.menuBar()
+        menubar.clear()  # [Fix] Prevent duplicate menus if init_ui called twice
         
         # [File Menu]
         file_menu = menubar.addMenu('파일 (File)')
@@ -106,12 +106,12 @@ class MainWindow(QMainWindow):
         btn_global_save = QPushButton("💾 저장")
         btn_global_save.setToolTip("현재 모든 설정(모델, 탭 설정 등)을 config.yaml에 저장합니다.")
         btn_global_save.clicked.connect(self.save_global_settings)
-        btn_global_save.setMaximumWidth(70)
+        btn_global_save.setFixedWidth(80) # [Fix] Force width
         
         btn_global_load = QPushButton("🔄 로드")
         btn_global_load.setToolTip("config.yaml에서 설정을 다시 불러옵니다.")
         btn_global_load.clicked.connect(self.load_global_settings)
-        btn_global_load.setMaximumWidth(70)
+        btn_global_load.setFixedWidth(80) # [Fix] Force width
 
         # [Ref] 2-Row Layout for Narrow Panel (500px)
         global_layout.addWidget(QLabel("체크포인트:"), 0, 0)
@@ -451,7 +451,7 @@ class MainWindow(QMainWindow):
 
     def apply_light_theme(self):
         self.current_theme = "light"
-        self.setStyleSheet("""
+        light_style = """
             QMainWindow { background-color: #f5f6fa; }
             QLabel { color: #2c3e50; font-family: 'Segoe UI', sans-serif; }
             QGroupBox { font-weight: bold; border: 1px solid #dcdde1; max-height: 50; margin-top: 1.5ex; border-radius: 5px; background-color: #ffffff; }

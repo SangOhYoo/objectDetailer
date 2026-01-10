@@ -76,43 +76,62 @@ def save_image_with_metadata(cv2_image, original_path, save_path, config):
         metadata.add_text("Software", "SAM3_FaceDetailer_Ultimate")
         metadata.add_text("Comment", json.dumps(ad_params)) # 기계 분석용 JSON도 별도 저장
 
-        # 4. 원본 EXIF 이식 및 갱신 (Key Step)
+        # 4. 원본 메타데이터/ICC 프로필 보존 (Robust Persistence)
         exif_bytes = b""
+        icc_profile = None
+        
+        # EXIF 딕셔너리 기본값 (새로 만들 경우)
         exif_dict = {"0th":{}, "Exif":{}, "GPS":{}, "1st":{}, "thumbnail":None}
         
         try:
             if os.path.exists(original_path):
                 original_pil = Image.open(original_path)
+                
+                # A. ICC Profile Preservation
+                icc_profile = original_pil.info.get("icc_profile")
+                
+                # B. PNG Info Preservation (Copy other chunks)
+                for k, v in original_pil.info.items():
+                    if k in ["exif", "parameters", "icc_profile"]: continue
+                    if isinstance(k, str) and isinstance(v, str):
+                        metadata.add_text(k, v)
+
+                # C. EXIF Preservation & Update
                 raw_exif = original_pil.info.get("exif")
                 if raw_exif:
                     try:
                         exif_dict = piexif.load(raw_exif)
+                        
+                        # Update Software & UserComment safely
+                        exif_dict["0th"][piexif.ImageIFD.Software] = "SAM3_FaceDetailer_Ultimate"
+                        user_comment = piexif.helper.UserComment.dump(param_text, encoding="unicode")
+                        exif_dict["Exif"][piexif.ExifIFD.UserComment] = user_comment
+                        
+                        # Re-dump updated EXIF
+                        exif_bytes = piexif.dump(exif_dict)
+                        
                     except Exception as e:
-                        print(f"[Metadata] EXIF Parsing Failed: {e}. Creating new EXIF.")
-        except Exception as e:
-            print(f"[Metadata] Failed to load original EXIF: {e}")
+                        print(f"[Metadata] EXIF Parsing/Update Failed: {e}. Preserving original EXIF bytes.")
+                        exif_bytes = raw_exif # Fallback: 원본 바이트 그대로 사용
+                else:
+                    # 원본 EXIF가 없으면 새로 생성한 정보만 사용
+                    # Software (0x0131)
+                    exif_dict["0th"][piexif.ImageIFD.Software] = "SAM3_FaceDetailer_Ultimate"
+                    # UserComment (0x9286)
+                    user_comment = piexif.helper.UserComment.dump(param_text, encoding="unicode")
+                    exif_dict["Exif"][piexif.ExifIFD.UserComment] = user_comment
+                    
+                    exif_bytes = piexif.dump(exif_dict)
 
-        # 5. EXIF Update (UserComment & Software)
-        try:
-            # Software (0x0131)
-            exif_dict["0th"][piexif.ImageIFD.Software] = "SAM3_FaceDetailer_Ultimate"
-            
-            # UserComment (0x9286) - ADetailer Params injection
-            # Make sure param_text is unicode
-            user_comment = piexif.helper.UserComment.dump(param_text, encoding="unicode")
-            exif_dict["Exif"][piexif.ExifIFD.UserComment] = user_comment
-            
-            # Dump back to bytes
-            exif_bytes = piexif.dump(exif_dict)
-            
         except Exception as e:
-            print(f"[Metadata] Error constructing EXIF: {e}")
-            # Fallback: Just try to use original if possible, or empty
-            pass
+            print(f"[Metadata] Failed to process original metadata: {e}")
+            # Fallback happens naturally as bytes/dict are initialized
 
         # 6. 저장 실행
-        # pnginfo는 PNG용, exif는 JPEG/WebP용 (하지만 PIL은 포맷에 따라 무시함)
-        pil_image.save(save_path, pnginfo=metadata, exif=exif_bytes, quality=95)
+        # pnginfo: PNG 텍스트 청크
+        # exif: JPEG/PNG Exif 청크
+        # icc_profile: 색상 프로필
+        pil_image.save(save_path, pnginfo=metadata, exif=exif_bytes, icc_profile=icc_profile, quality=95)
             
         return True
 

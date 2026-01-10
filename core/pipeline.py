@@ -121,8 +121,8 @@ class ImageProcessor:
                 # gc.collect()
                 # torch.cuda.empty_cache()
                 
-        # [Fix] Clean up VRAM after processing
-        print("[Pipeline] Offloading models to free VRAM...")
+        if cfg.get('system', 'log_level') == 'DEBUG':
+            print("[Pipeline] Offloading models to free VRAM...")
         self.detector.offload_models()
         self.face_restorer.unload_model() 
         self.model_manager.unload_model() 
@@ -169,8 +169,9 @@ class ImageProcessor:
         max_ratio = config.get('max_face_ratio', 1.0) # Default 1.0 (100%)
         
         # [Debug] Console Print
-        print(f"[Pipeline] Filter Settings: Min={min_ratio*100:.2f}% ({min_ratio:.4f}), Max={max_ratio*100:.2f}% ({max_ratio:.4f})")
-        print(f"[Pipeline] Image Area: {img_area} ({img_w}x{img_h})")
+        if cfg.get('system', 'log_level') == 'DEBUG':
+            self.log(f"[Pipeline] Filter Settings: Min={min_ratio*100:.2f}% ({min_ratio:.4f}), Max={max_ratio*100:.2f}% ({max_ratio:.4f})")
+            self.log(f"[Pipeline] Image Area: {img_area} ({img_w}x{img_h})")
 
         filtered_dets = []
         for d in detections:
@@ -179,7 +180,8 @@ class ImageProcessor:
             ratio = box_area / img_area
             
             pass_filter = min_ratio <= ratio <= max_ratio
-            print(f"[Pipeline] Det: {d.get('label_name')} Ratio: {ratio:.4f} ({ratio*100:.2f}%) -> {'PASS' if pass_filter else 'FAIL'}")
+            if cfg.get('system', 'log_level') == 'DEBUG':
+                 self.log(f"[Pipeline] Det: {d.get('label_name')} Ratio: {ratio:.4f} ({ratio*100:.2f}%) -> {'PASS' if pass_filter else 'FAIL'}")
 
             # [Debug]
             if cfg.get('system', 'log_level') == 'DEBUG':
@@ -390,12 +392,12 @@ class ImageProcessor:
         # ---------------------------------------------------------
         clean_bg = self._remove_object(image, union_mask, config)
         
-        # [Debug] Save Clean Background
-        debug_path = os.path.join(cfg.get_path('output'), "debug_clean_bg.png")
-        try:
-            cv2.imwrite(debug_path, cv2.cvtColor(clean_bg, cv2.COLOR_RGB2BGR))
-            self.log(f"    [Debug] Saved clean background to {debug_path}")
-        except: pass
+        # [Debug] Save Clean Background - Removed for production
+        # debug_path = os.path.join(cfg.get_path('output'), "debug_clean_bg.png")
+        # try:
+        #     cv2.imwrite(debug_path, cv2.cvtColor(clean_bg, cv2.COLOR_RGB2BGR))
+        #     self.log(f"    [Debug] Saved clean background to {debug_path}")
+        # except: pass
         
         # For now, to verify this step, we return the clean_bg as the result
         # This effectively pauses the pipeline at Step 1 for user verification.

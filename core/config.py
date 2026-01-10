@@ -62,9 +62,62 @@ class AppConfig:
                 "resolution": 512,
                 "padding": 1.5,
                 "denoise": 0.4,
+                "conf_thresh": 0.35, # Global Confidence Threshold
+                "min_face_ratio": 0.01, # 1%
+                "max_face_ratio": 1.0, # 100%
+                "max_det": 20,
                 "controlnet_weight": 0.5,
                 "sort_method": "신뢰도",
-                "max_det": 20
+                "restore_face_strength": 1.0,
+                
+                # [New] Hires Fix Defaults
+                "hires_upscale_factor": 1.5,
+                "hires_steps": 14,
+                "hires_denoise": 0.4,
+                "hires_cfg": 5.0,
+                
+                # [New] Detail Daemon Defaults
+                "dd_amount": 0.1,
+                "dd_start": 0.2,
+                "dd_end": 0.8,
+                "dd_start_offset": 0.0,
+                "dd_end_offset": 0.0,
+                "dd_bias": 0.5,
+                "dd_exponent": 1.0,
+                "dd_fade": 0.0,
+                "dd_smooth": True,
+                "dd_mode": "both",
+                "dd_enabled": False,
+                
+                # [New] Soft Inpainting Defaults
+                "soft_schedule_bias": 1.0,
+                "soft_preservation_strength": 0.5,
+                "soft_transition_contrast": 4.0,
+                "soft_mask_influence": 0.0,
+                "soft_diff_threshold": 0.5,
+                "soft_diff_contrast": 2.0,
+                
+                # [New] BMAB Defaults
+                "bmab_contrast": 1.0,
+                "bmab_brightness": 1.0,
+                "bmab_sharpness": 1.0,
+                "bmab_color_saturation": 1.0,
+                "bmab_color_temperature": 0.0,
+                "bmab_noise_alpha": 0.0,
+                "bmab_noise_alpha_final": 0.0,
+                "bmab_enabled": True,
+                "bmab_landscape_detail": False,
+                
+                # [New] BMAB Edge Defaults
+                "bmab_edge_enabled": False,
+                "bmab_edge_strength": 0.0,
+                "bmab_edge_low": 50,
+                "bmab_edge_high": 200,
+                
+                # [New] Canvas Expansion Defaults
+                "resize_enable": False,
+                "resize_ratio": 0.6,
+                "resize_align": "Center"
             },
             "ui_settings": {}  # For prompt persistence
         }

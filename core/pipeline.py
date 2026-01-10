@@ -1007,6 +1007,16 @@ class ImageProcessor:
         
         # [Detail Daemon & Soft Inpainting Prep]
         dd_enabled = config.get('dd_enabled', False)
+        
+        # [DD Hires Check] 
+        # If Hires Fix is active (upscaler selected), we only enable DD if 'dd_hires' is checked.
+        is_hires_active = (config.get('hires_upscaler', 'None') != 'None')
+        if is_hires_active and dd_enabled:
+            if not config.get('dd_hires', False):
+                if config.get('system', 'log_level') == 'DEBUG':
+                    self.log("    [DetailDaemon] Disabled because Hires Fix is active and 'dd_hires' is False.")
+                dd_enabled = False
+
         use_soft = config.get('use_soft_inpainting', False)
         
         # We enable DetailDaemonContext if either DD or SoftInpainting is active
@@ -1089,7 +1099,12 @@ class ImageProcessor:
         
         # Restore Face (얼굴 보정)
         if config.get('restore_face', False):
-            res_np = self.face_restorer.restore(res_np)
+            restore_strength = config.get('restore_face_strength', 1.0)
+            res_np = self.face_restorer.restore(res_np, strength=restore_strength)
+
+        # [BMAB] Apply Adjustments (Contrast, Brightness, Edge, etc.)
+        if config.get('bmab_enabled', False):
+             res_np = self._apply_bmab_effects(res_np, config)
 
         # [Fix] Use Geometry Module for Inverse Transform & Blending
         final_img = restore_and_paste(image, res_np, M, mask_blur=config['mask_blur'], paste_mask=paste_mask)
@@ -1323,6 +1338,103 @@ class ImageProcessor:
         
         return clean_prompt, loras
         
+    def _apply_bmab_effects(self, image, config):
+        """
+        [BMAB] Apply Basic Image Adjustments (Brightness, Contrast, etc.)
+        Order: Saturation -> Temp -> Bright/Contrast -> Sharpness -> Edge -> Noise
+        """
+        img_float = image.astype(np.float32) / 255.0
+        
+        # 1. Saturation
+        sat = config.get('bmab_color_saturation', 1.0)
+        if sat != 1.0:
+            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV).astype(np.float32)
+            hsv[..., 1] *= sat
+            hsv[..., 1] = np.clip(hsv[..., 1], 0, 255)
+            # Use HSV result as base? Or just convert S channel back?
+            # Better to convert full HSV back to BGR.
+            image = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+            img_float = image.astype(np.float32) / 255.0
+
+        # 2. Color Temperature (Simple R/B Shift)
+        # Temp: -2000 ~ +2000 (Default 0)
+        # +: Warmer (R+, B-)
+        # -: Cooler (R-, B+)
+        temp = config.get('bmab_color_temperature', 0.0)
+        if temp != 0:
+            shift = temp / 2000.0 * 0.2 # Max 20% shift
+            # BGR order
+            img_float[..., 0] -= shift # Blue
+            img_float[..., 2] += shift # Red
+            img_float = np.clip(img_float, 0.0, 1.0)
+
+        # 3. Brightness & Contrast
+        # Contrast: 0~2 (1.0), Brightness: 0~2 (1.0)
+        cont = config.get('bmab_contrast', 1.0)
+        bri = config.get('bmab_brightness', 1.0)
+        
+        if cont != 1.0 or bri != 1.0:
+            # Brightness is additive scaling in this context usually?
+            # Or simple mul/add.
+            # config bri 1.0 = neutral.
+            # Standard: dest = src * contrast + brightness
+            # But brightness 1.0 means no change? 
+            # If bri is 0~2, maybe 1 is neutral. So offset = (bri - 1.0).
+            
+            # Center contrast around 0.5
+            img_float = (img_float - 0.5) * cont + 0.5
+            img_float += (bri - 1.0)
+            img_float = np.clip(img_float, 0.0, 1.0)
+            
+        # Back to uint8 for Canny/Sharpness
+        res = (img_float * 255).clip(0, 255).astype(np.uint8)
+        
+        # 4. Sharpness
+        sha = config.get('bmab_sharpness', 1.0)
+        if sha != 1.0:
+            # Unsharp Mask
+            gaussian = cv2.GaussianBlur(res, (0, 0), 3.0)
+            # sharpened = original + (original - blurred) * amount
+            # amount = sha? If sha is 1.0 (default), does it mean no sharpening?
+            # Previous analysis: default 1.0. If 1.0 is neutral, then amount = sha - 1.0?
+            # UI range -5 to 5. Default 1.0.
+            # If user sets 1.0, they expect NO CHANGE? Or mild sharpening?
+            # Usually "Sharpness" 1.0 in edits means "Original".
+            # So strength = sha - 1.0.
+            strength = sha - 1.0
+            if strength != 0:
+                res = cv2.addWeighted(res, 1.0 + strength, gaussian, -strength, 0)
+        
+        # 5. Edge Enhancement (Canny Overlay)
+        if config.get('bmab_edge_enabled', False):
+            low = config.get('bmab_edge_low', 50)
+            high = config.get('bmab_edge_high', 150)
+            strength = config.get('bmab_edge_strength', 1.0) # 0~5
+            
+            edges = cv2.Canny(res, low, high)
+            edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+            
+            # Blend: Add edges to image
+            # Only add where edge > 0
+            # res = res + edges * strength
+            if strength > 0:
+                 # Need float for addition to avoid overflow wrapping
+                 res_f = res.astype(np.float32)
+                 edge_f = edges_bgr.astype(np.float32) * strength
+                 res_f += edge_f
+                 res = np.clip(res_f, 0, 255).astype(np.uint8)
+
+        # 6. Noise
+        noise_alpha = config.get('bmab_noise_alpha', 0.0)
+        if noise_alpha > 0:
+            h, w, c = res.shape
+            noise = np.random.normal(0, 25, (h, w, c)).astype(np.float32)
+            res_f = res.astype(np.float32)
+            res_f = res_f * (1 - noise_alpha) + (res_f + noise) * noise_alpha
+            res = np.clip(res_f, 0, 255).astype(np.uint8)
+
+        return res
+
     def _apply_mask_content(self, image, mask, mode):
         """
         [New] Mask Content (Initialization) Logic

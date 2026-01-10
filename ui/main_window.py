@@ -2,11 +2,12 @@ import sys
 import os
 import cv2
 import numpy as np
+import torch
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QTabWidget, QLabel, QPushButton, QSplitter,
                              QTextEdit, QComboBox, QGroupBox, QFileDialog, QSizePolicy, QGridLayout,
-                             QMenu, QMessageBox, QProgressBar)
-from PyQt6.QtCore import Qt
+                             QMenu, QMessageBox, QProgressBar, QSpinBox)
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QAction, QActionGroup
 
 from ui.main_window_tabs import AdetailerUnitWidget
@@ -18,13 +19,18 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Standalone ADetailer - Dual GPU Edition")
-        self.resize(1600, 1000) # 기본 사이즈 (HD+)
+        # [Ref] Increase Window Size for Wide Right Panel View (User Permission)
+        self.resize(1800, 1050) # Wide HD+
         
         self.controller = None
         self.preview_processor = None # [New] For quick detection preview
         
         self.init_ui()
-        self.apply_light_theme() # 기본 테마
+        self.init_ui()
+        
+        # [Fix] Theme Initialization (Load from Config)
+        self.current_theme = "light" # Default
+        self.load_theme_setting()
 
     def init_ui(self):
         # ============================================================
@@ -96,16 +102,9 @@ class MainWindow(QMainWindow):
         else:
             self.combo_global_vae.addItem("Automatic")
         
-        global_layout.addWidget(QLabel("체크포인트:"), 0, 0)
-        global_layout.addWidget(self.combo_global_ckpt, 0, 1)
-        global_layout.addWidget(QLabel("VAE:"), 0, 2)
-        global_layout.addWidget(self.combo_global_vae, 0, 3)
-        
-        self.combo_global_ckpt.currentTextChanged.connect(self.on_global_ckpt_changed)
-
         # [New] Global Save/Load Buttons
         btn_global_save = QPushButton("💾 저장")
-        btn_global_save.setToolTip("현재 선택된 체크포인트와 VAE를 config.yaml에 저장합니다.")
+        btn_global_save.setToolTip("현재 모든 설정(모델, 탭 설정 등)을 config.yaml에 저장합니다.")
         btn_global_save.clicked.connect(self.save_global_settings)
         btn_global_save.setMaximumWidth(70)
         
@@ -114,12 +113,20 @@ class MainWindow(QMainWindow):
         btn_global_load.clicked.connect(self.load_global_settings)
         btn_global_load.setMaximumWidth(70)
 
-        global_layout.addWidget(btn_global_save, 0, 4)
-        global_layout.addWidget(btn_global_load, 0, 5)
+        # [Ref] 2-Row Layout for Narrow Panel (500px)
+        global_layout.addWidget(QLabel("체크포인트:"), 0, 0)
+        global_layout.addWidget(self.combo_global_ckpt, 0, 1)
+        global_layout.addWidget(btn_global_save, 0, 2)
         
-        # [Fix] 콤보박스 비율 50:50 강제 (컬럼 1과 3의 확장 비율을 1:1로 설정)
+        global_layout.addWidget(QLabel("VAE:"), 1, 0)
+        global_layout.addWidget(self.combo_global_vae, 1, 1)
+        global_layout.addWidget(btn_global_load, 1, 2)
+        
+        # [Ref] Tighter Global Margins
+        global_layout.setContentsMargins(2, 2, 2, 2)
+        global_layout.setSpacing(5)
+        # [Fix] Expand both combos equally
         global_layout.setColumnStretch(1, 1)
-        global_layout.setColumnStretch(3, 1)
         
         self.global_group.setLayout(global_layout)
         left_layout.addWidget(self.global_group)
@@ -138,14 +145,17 @@ class MainWindow(QMainWindow):
             
             self.unit_widgets.append(tab)
             self.tabs.addTab(tab, f"패스 {i}")
+            
+        # [Fix] Force select first tab (Pass 1) on startup
+        self.tabs.setCurrentIndex(0)
         
         left_layout.addWidget(self.tabs)
         
         left_panel.setMinimumWidth(400) # 최소 너비 확보 (40% 비율 유연성)
 
-        # [UI Fix] Initial Splitter Ratio (Left:Right = 700:Rest)
-        # Prevents horizontal scrollbar on startup (Increased from 550)
-        self.splitter.setSizes([700, 900])
+        # [UI Fix] Initial Splitter Ratio (Left:Right = ~1050:550)
+        # Using [1050, 550] ensures the left panel gets ~65% of the 1600px window (~1040px)
+        self.splitter.setSizes([1050, 550])
 
         # ============================================================
         # [Right Panel] Preview & Logs
@@ -195,6 +205,29 @@ class MainWindow(QMainWindow):
         self.btn_stop.clicked.connect(self.stop_processing)
         self.btn_stop.setFixedHeight(45)
         
+        # [New] Worker Count Control
+        l_worker = QVBoxLayout()
+        l_worker.setSpacing(0)
+        lbl_worker = QLabel("프로세스 수:")
+        lbl_worker.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_worker.setStyleSheet("font-size: 10px; color: #bdc3c7;")
+        
+        self.spin_worker_count = QSpinBox()
+        self.spin_worker_count.setRange(1, 16)
+        # Default: GPU Count or 1
+        default_workers = 1
+        if torch.cuda.is_available():
+            default_workers = torch.cuda.device_count()
+        self.spin_worker_count.setValue(default_workers)
+        self.spin_worker_count.setToolTip("병렬 처리를 위한 워커 프로세스 수입니다.\n1 GPU에서도 여러 워커를 사용하여 속도를 높일 수 있습니다 (VRAM 주의).")
+        self.spin_worker_count.setFixedHeight(25)
+        self.spin_worker_count.setStyleSheet("font-weight: bold;")
+        
+        l_worker.addWidget(lbl_worker)
+        l_worker.addWidget(self.spin_worker_count)
+        
+        # [Adjust] Reordered buttons: WorkerControl -> Load -> Run -> Stop
+        btn_layout.addLayout(l_worker) # Add Worker Control (First)
         btn_layout.addWidget(self.btn_load)
         btn_layout.addWidget(self.btn_run)
         btn_layout.addWidget(self.btn_stop)
@@ -208,30 +241,43 @@ class MainWindow(QMainWindow):
         # Example: [Preview Height, Compare Height] in pixels
         self.right_splitter.setSizes([400, 500]) 
 
+        # Progress Bar (Moved to Right Panel Bottom)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedHeight(25)
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setVisible(True) # Always visible now
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                text-align: center;
+                background-color: #ecf0f1;
+            }
+            QProgressBar::chunk {
+                background-color: #3498db;
+                border-radius: 3px;
+            }
+        """)
+
         right_layout.addWidget(self.right_splitter, 3)
         right_layout.addWidget(self.file_queue, 1)
         right_layout.addWidget(self.log_text, 0)
         right_layout.addLayout(btn_layout)
-
+        right_layout.addWidget(self.progress_bar) # [New Position]
+        
         # Add to Splitter
         self.splitter.addWidget(left_panel)
         self.splitter.addWidget(right_panel)
-        # self.splitter.setStretchFactor(0, 4) # Deprecated in favor of setSizes
-        # self.splitter.setStretchFactor(1, 6)
         
-        # [Adjust] Increase left panel width to 1020px (User Request to fix scrollbar)
-        self.splitter.setSizes([1020, 580])
-
-        # Progress Bar in Status Bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximumWidth(300)
-        self.progress_bar.setVisible(False)
+        # [New] Apply Splitter Size (Force Left Limit)
+        # Using QTimer to apply AFTER layout calculation
+        # [User Request] Set left panel to safe narrow 550px (Dense) for Wide Right Panel (1250px)
+        QTimer.singleShot(0, lambda: self.splitter.setSizes([550, 1250]))
 
         self.status_filename_label = QLabel("")
         self.status_filename_label.setStyleSheet("margin-left: 10px;")
-
         self.statusBar().addPermanentWidget(self.status_filename_label)
-        self.statusBar().addPermanentWidget(self.progress_bar)
+        # self.statusBar().addPermanentWidget(self.progress_bar) # Removed from status bar
         self.statusBar().showMessage("[System] Initialized. Ready.")
 
         # Trigger initial model check
@@ -274,19 +320,38 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "저장 완료", f"{tab.unit_name} 설정이 저장되었습니다.")
 
     def save_global_settings(self):
-        """글로벌 모델 설정을 config.yaml에 저장"""
+        """글로벌 모델 설정 및 모든 탭의 설정을 config.yaml에 저장"""
+        # 1. Global Settings
         ckpt = self.combo_global_ckpt.currentText()
         vae = self.combo_global_vae.currentText()
+        workers = self.spin_worker_count.value()
         
         files_conf = cfg.get('files') or {}
         files_conf['checkpoint_file'] = ckpt
         files_conf['vae_file'] = vae
         
-        if cfg.save_config({'files': files_conf}):
-            self.log(f"[Config] Global settings saved: CKPT='{ckpt}', VAE='{vae}'")
-            QMessageBox.information(self, "저장 완료", "글로벌 모델 설정이 config.yaml에 저장되었습니다.")
+        system_conf = cfg.get('system') or {}
+        system_conf = cfg.get('system') or {}
+        system_conf['worker_count'] = workers
+        system_conf['theme'] = self.current_theme # Save Theme
+        
+        # 2. Tab Settings (UI Settings)
+        all_settings = {}
+        for i, tab in enumerate(self.unit_widgets):
+            all_settings[tab.unit_name] = tab.get_config()
+        
+        # 3. Save All
+        data_to_save = {
+            'files': files_conf,
+            'system': system_conf,
+            'ui_settings': all_settings
+        }
+        
+        if cfg.save_config(data_to_save):
+            self.log(f"[Config] All settings saved: CKPT='{ckpt}', VAE='{vae}', and {len(all_settings)} tabs.")
+            QMessageBox.information(self, "저장 완료 (Saved)", "모든 설정(글로벌 모델 + 탭 설정)이 저장되었습니다.")
         else:
-            self.log("[Config] Failed to save global settings.")
+            self.log("[Config] Failed to save settings.")
 
     def load_global_settings(self, silent=False):
         """config.yaml에서 글로벌 모델 설정을 불러와 UI에 적용"""
@@ -294,6 +359,7 @@ class MainWindow(QMainWindow):
         
         ckpt = cfg.get('files', 'checkpoint_file')
         vae = cfg.get('files', 'vae_file')
+        workers = cfg.get('system', 'worker_count')
         
         if ckpt:
             idx = self.combo_global_ckpt.findText(ckpt)
@@ -302,12 +368,26 @@ class MainWindow(QMainWindow):
             idx = self.combo_global_vae.findText(vae)
             if idx >= 0: self.combo_global_vae.setCurrentIndex(idx)
             
+        if workers and isinstance(workers, int):
+            self.spin_worker_count.setValue(workers)
+        if workers and isinstance(workers, int):
+            self.spin_worker_count.setValue(workers)
+            
         if not silent:
-            self.log(f"[Config] Global settings loaded: CKPT='{ckpt}', VAE='{vae}'")
+            self.log(f"[Config] Global settings loaded: CKPT='{ckpt}', VAE='{vae}', Workers={workers}")
             QMessageBox.information(self, "로드 완료", "글로벌 모델 설정을 불러왔습니다.")
+            
+    def load_theme_setting(self):
+        """저장된 테마 설정 로드 및 적용"""
+        saved_theme = cfg.get('system', 'theme') or "light"
+        if saved_theme == "dark":
+            self.apply_dark_theme()
+        else:
+            self.apply_light_theme()
 
     # --- Theme & Basics ---
     def apply_dark_theme(self):
+        self.current_theme = "dark"
         dark_style = """
             QMainWindow, QWidget { background-color: #2b2b2b; color: #eeeeee; font-size: 10pt; }
             QSplitter::handle { background-color: #444; width: 4px; }
@@ -370,11 +450,14 @@ class MainWindow(QMainWindow):
             tab.set_theme("dark")
 
     def apply_light_theme(self):
-        light_style = """
-            QMainWindow, QWidget { background-color: #f5f5f5; color: #333333; font-size: 10pt; }
-            QSplitter::handle { background-color: #ccc; width: 4px; }
-            QGroupBox { border: 1px solid #cccccc; margin-top: 15px; border-radius: 4px; background-color: #ffffff; }
-            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #0056b3; font-weight: bold; }
+        self.current_theme = "light"
+        self.setStyleSheet("""
+            QMainWindow { background-color: #f5f6fa; }
+            QLabel { color: #2c3e50; font-family: 'Segoe UI', sans-serif; }
+            QGroupBox { font-weight: bold; border: 1px solid #dcdde1; max-height: 50; margin-top: 1.5ex; border-radius: 5px; background-color: #ffffff; }
+            QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 5px; color: #34495e; }
+            QPushButton { background-color: #ecf0f1; border: 1px solid #bdc3c7; border-radius: 4px; padding: 5px; }
+            QPushButton:hover { background-color: #bdc3c7; }
             QLineEdit, QTextEdit, QComboBox { 
                 background-color: #ffffff; border: 1px solid #999; padding: 4px; border-radius: 3px; color: #333;
             }
@@ -535,7 +618,10 @@ class MainWindow(QMainWindow):
         self.controller.file_started_signal.connect(self.update_status_filename)
         self.controller.preview_signal.connect(self.update_preview)
         self.controller.result_signal.connect(self.handle_result)
-        self.controller.start_processing()
+        
+        # [Fix] Pass Worker Count
+        workers = self.spin_worker_count.value()
+        self.controller.start_processing(max_workers=workers)
 
     def handle_result(self, path, result_img):
         if result_img is None:

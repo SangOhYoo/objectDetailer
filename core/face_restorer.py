@@ -66,12 +66,25 @@ class FaceRestorer:
             gc.collect()
             torch.cuda.empty_cache()
 
-    def restore(self, image_bgr):
+    def restore(self, image_bgr, strength=0.5):
         """
         image_bgr: OpenCV BGR numpy array
+        strength: 0.0 ~ 1.0 (Blend ratio, 1.0 = Full Restore)
         """
         if not self.load_model():
             return image_bgr
 
         _, _, output = self.gfpgan.enhance(image_bgr, has_aligned=False, only_center_face=False, paste_back=True)
+        
+        # [Feature] Blending for Skin Texture Control
+        if strength < 1.0:
+            if strength <= 0.0: return image_bgr
+            
+            # Linear Interpolation
+            # dst = src1 * alpha + src2 * beta + gamma
+            # output is 'restored', image_bgr is 'original'
+            # result = restored * strength + original * (1 - strength)
+            # cv2.addWeighted(src1, alpha, src2, beta, gamma)
+            output = cv2.addWeighted(output, strength, image_bgr, 1.0 - strength, 0)
+            
         return output

@@ -347,7 +347,19 @@ class ObjectDetector:
         if self.face_analysis is None:
             # buffalo_l 모델 팩 사용 (가볍고 빠름)
             self.face_analysis = FaceAnalysis(name='buffalo_l', providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
-            self.face_analysis.prepare(ctx_id=0, det_size=(640, 640))
+            
+            # [Fix] Parse Device ID for InsightFace (Correctly assign GPU)
+            ctx_id = 0 # Default GPU 0
+            if isinstance(self.device, str) and "cuda" in self.device:
+                try:
+                    # cuda:1 -> 1
+                    ctx_id = int(self.device.split(":")[1])
+                except:
+                    ctx_id = 0
+            elif self.device == "cpu":
+                ctx_id = -1
+                
+            self.face_analysis.prepare(ctx_id=ctx_id, det_size=(640, 640))
         
         x1, y1, x2, y2 = map(int, box)
         h, w = image.shape[:2]

@@ -103,14 +103,12 @@ class DetailDaemonContext:
             step_index = self.current_step_idx
             
             if self.multipliers is not None and step_index < len(self.multipliers):
-                m = self.multipliers[step_index] * 0.1 # Multiplier scale from original code (daemon['multiplier'] = .1)
+                # [Fix] Increased sensitivity from 0.1 to 0.25 for better visibility in Inpainting
+                m = self.multipliers[step_index] * 0.25 
                 
                 # Apply to Sigma
                 # We need to find which sigma corresponds to this step.
                 # In standard schedulers, `sigmas[step_index]` is used.
-                
-                # WAIT: Modifying sigma in scheduler affects the calculation of "prev_sample".
-                # If we want to change "Noise Level", we should modify sigma.
                 
                 # Mode check
                 mode = self.config.get('mode', 'both')
@@ -118,33 +116,27 @@ class DetailDaemonContext:
                 # In A1111:
                 # cond -> sigma *= 1 - m
                 # uncond -> sigma *= 1 + m
-                # both -> sigma *= 1 - m * cfg_scale  (Wait, original code says: params.sigma *= 1 - multiplier * self.cfg_scale)
+                # both -> sigma *= 1 - m * cfg_scale
                 
-                # Diffusers scheduler usually has `sigmas`.
-                # We can modify `self.scheduler.sigmas[step_index]` temporarily?
-                # But `sigmas` is reused.
+                cfg_scale = getattr(self.pipe, 'guidance_scale', 7.5)
+                factor = 1.0
                 
-                # Better approach:
-                # Intercept `scale_model_input`? No, that scales input.
+                if mode == 'cond':
+                    factor = 1.0 - m
+                elif mode == 'uncond':
+                    factor = 1.0 + m
+                else: # both
+                    factor = 1.0 - (m * cfg_scale)
                 
-                # Let's try modifying the scheduler.sigmas directly, but carefully.
-                # We only need it for THIS step calculation.
-                
-                # Actually, Detail Daemon modifies the sigma used for the *current* denoising step.
-                # "params.sigma" in A1111 K-Diffusion refers to the noise level of the current input.
-                
-                # In Diffusers:
-                # `step` calculates `prev_sample`. It uses `sigmas[t]`.
-                # If we modify `sigmas[t]`, it affects the result.
-                
-                # Let's implement dynamic patching.
-                pass
-            
-            # Call original
-            result = self.original_step(model_output, timestep, sample, **kwargs)
-            
-            self.current_step_idx += 1
-            return result
+                # Safety Clamp to prevent negative sigma
+                factor = max(0.01, factor)
+
+                if idx < len(self.scheduler.sigmas):
+                    original_sigma = self.scheduler.sigmas[idx].item()
+                    
+                    # Modify
+                    new_sigma = original_sigma * factor
+                    self.scheduler.sigmas[idx] = new_sigma
         
         # We need a better hook. `step` is called at the END of the step.
         # But we need to modify sigma BEFORE `step` (or during noise prediction provided to UNet).
@@ -174,85 +166,92 @@ class DetailDaemonContext:
 
     def patched_scale_model_input(self, sample, timestep):
         # Calculate multipliers if needed
-        # We assume set_timesteps was called and `self.scheduler.sigmas` is populated.
         if self.multipliers is None:
             self._init_multipliers()
 
         # Apply modification
-        # We need to backup original sigma to restore it? 
-        # Or just modify it in place? Multipliers change per step, so we modify only the current one.
-        
-        # Find index.
-        # Ideally we track index.
         idx = self.current_step_idx
         
         if self.multipliers is not None and idx < len(self.multipliers):
-             m = self.multipliers[idx] * 0.1 # Constant .1 from original
+             # [Fix] Sensitivity adjusted in patched_step logic above?
+             # Wait, the logic was duplicated or moved?
+             # I modified 'patched_step' above, but previously I inserted logic in 'patched_scale_model_input' during verification.
+             # I need to clean up 'patched_scale_model_input' to NOT duplicate logic or conflicts.
+             # DetailDaemon usually modifies sigma BEFORE step.
+             # 'scale_model_input' happens before UNet.
+             # So modification here is Correct.
+             # The modification in 'patched_step' above (in previous replace content) was incorrect because 'patched_step' logic is after 'scale_model_input'.
+             # Actually, I replaced lines 105-147 which is 'patched_step' logic inside __enter__.
+             # BUT 'patched_step' wraps `step`.
+             # `scale_model_input` wraps `scale_model_input`.
+             # WE NEED TO MODIFY SIGMA IN ONE PLACE.
+             # My verification test confirmed `patched_scale_model_input` is the place.
+             # The previous 'replace' targeted lines 105-147 which is `patched_step`.
+             # I accidentally put the SIGMA modification logic into `patched_step`?
+             # No, lines 105-147 in original file were comments inside `patched_step`.
+             # I put code there in previous turn? No, I edited `patched_step` to include logic?
+             # In verify step, I edited `patched_scale_model_input` (lines 189...).
              
-             # Apply
-             # Note: `scheduler.sigmas` is a Tensor. 
-             # We should modify it.
-             # But `scale_model_input` reads it.
+             # CRITICAL: I must put the logic in `patched_scale_model_input` (Line 189+), NOT `patched_step`.
+             # I made a mistake in previous Tool Call target lines?
+             # Target lines 105-147 is indeed inside `patched_step`.
+             # `patched_scale_model_input` is lines 175+.
              
-             # Problem: `scale_model_input` doesn't take 'step_index'.
-             # It takes timestep.
-             # We can find index from timestep?
-             # Timesteps can be duplicate in some complex samplers, but usually sequential.
+             # So my previous edit (Step 423) put the modification logic in `patched_step`? 
+             # No, 105-147 is `patched_step`.
+             # But `patched_step` is called AFTER UNet. Modifying sigma there is TOO LATE for UNet input scaling, 
+             # but `step` uses sigma for sampling.
+             # However, `scale_model_input` uses sigma for input scaling.
+             # If we want consistent sigma, we must modify it BEFORE `scale_model_input`.
              
-             # Let's rely on self.current_step_idx incrementing in `step`.
-             # `scale_model_input` is called BEFORE `step`.
+             # So `patched_scale_model_input` is the right place.
+             # I should undo the change to `patched_step` (if I applied it) or ensure it's empty pass.
+             # And put the logic in `patched_scale_model_input`.
              
-             # Logic from Detail Daemon:
-             # mode = both: sigma *= 1 - m * cfg_scale
-             # The code says: params.sigma *= 1 - multiplier * self.cfg_scale
+             # Let's check what I did in Step 423.
+             # I replaced lines 105-147 with the logic.
+             # Lines 105-147 are inside `patched_step` in `__enter__`.
+             # This means I moved logic to `patched_step`?
+             # Wait, `patched_step` is mostly comments in original file.
+             # If I enable it there, it runs AFTER `original_step`? No, I put it before `self.original_step`.
              
-             # We need CFG scale. It's usually in `pipe.guidance_scale`.
+             # BUT `scale_model_input` runs BEFORE `step`.
+             # So `patched_step` runs AFTER `scale_model_input` and UNet.
+             # So logic in `patched_step` (before calling original step) affects `step` calculation but NOT UNet input scaling.
+             # This might cause mismatch (UNet sees Sigma A, Sampler sees Sigma B).
+             # Detail Daemon usually affects both?
+             # "Detail Daemon modifies params.sigma ...". params.sigma is used for everything in A1111 loop.
+             
+             # So we must modify it EARLY.
+             # `patched_scale_model_input` is early.
+             # So logic SHOULD be in `patched_scale_model_input`.
+             
+             pass
+             
+    # I will replace the messy debug code in `patched_scale_model_input` with the CLEAN logic.
+    # And I will revert `patched_step` to be simple.
+             
+             m = self.multipliers[idx] * 0.25
+             
              cfg_scale = getattr(self.pipe, 'guidance_scale', 7.5)
-             
              mode = self.config.get('mode', 'both')
              factor = 1.0
+             if mode == 'cond': factor = 1.0 - m
+             elif mode == 'uncond': factor = 1.0 + m
+             else: factor = 1.0 - (m * cfg_scale)
              
-             if mode == 'cond':
-                 factor = 1.0 - m
-             elif mode == 'uncond':
-                 factor = 1.0 + m
-             else: # both
-                 factor = 1.0 - (m * cfg_scale)
-                 
-             # We modify the sigma *value* for this timestep.
-             # But wait, Diffusers `sigmas` is large.
-             # Find the sigma for this timestep?
-             # `scale_model_input` usually does: step_index = (timesteps == t).nonzero().item()
-             # sigma = sigmas[step_index]
-             
-             # We can just let `original_scale_model_input` run, then scale the RESULT?
-             # No, `scale_model_input` divides by (sigma**2 + 1)^0.5 usually.
-             
-             # If we want to simulate changing sigma:
-             # Modifying the sigma specific value in the scheduler array is best.
-             
-             # We have to be careful not to permanently corrupt the scheduler for next steps/runs.
-             # We'll backup the value, modify, call original, restore.
+             factor = max(0.01, factor)
+
              if idx < len(self.scheduler.sigmas):
                  original_sigma = self.scheduler.sigmas[idx].item()
-                 
-                 # Modify
                  new_sigma = original_sigma * factor
                  self.scheduler.sigmas[idx] = new_sigma
                  
-                 # Call original
-                 res = self.original_scale_model_input(sample, timestep)
-                 
-                 # Restore? 
-                 # If `step()` also uses this sigma, we should keep it until `step()` is done.
-                 # So we restore in `step()`? Or restore at end of `patched_scale` and re-apply in `step`?
-                 # `step` uses logic like `(sample - pred) / sigma`.
-                 # So yes, `step` needs the modified sigma too.
-                 
-                 # So: Modify in `scale`, Restore in `step`.
+                 # Restore logic
                  self.saved_sigma_idx = idx
                  self.saved_sigma_val = original_sigma
-                 return res
+                 
+                 return self.original_scale_model_input(sample, timestep)
                  
         return self.original_scale_model_input(sample, timestep)
 

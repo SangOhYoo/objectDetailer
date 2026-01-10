@@ -151,22 +151,23 @@ class AdetailerUnitWidget(QWidget):
         self.txt_pos = QTextEdit()
         self.txt_pos.setPlaceholderText("Positive Prompt (긍정 프롬프트)")
         self.txt_pos.setText(self.saved_config.get('pos_prompt', ""))
-        self.txt_pos.setMinimumHeight(60) # Generous height
-        self.txt_pos.setMaximumHeight(80)
-        # [Fix] Use ObjectName for theming instead of inline style
+        # [Ref] Unlock Max Height for Vertical Expansion
+        self.txt_pos.setMinimumHeight(60) 
+        self.txt_pos.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.txt_pos.setObjectName("pos_prompt")
         
         # Negative
         self.txt_neg = QTextEdit()
         self.txt_neg.setPlaceholderText("Negative Prompt (부정 프롬프트)")
         self.txt_neg.setText(self.saved_config.get('neg_prompt', ""))
-        self.txt_neg.setMinimumHeight(45) # Slightly smaller than pos but generous
-        self.txt_neg.setMaximumHeight(60)
-        # [Fix] Use ObjectName for theming instead of inline style
+        # [Ref] Unlock Max Height for Vertical Expansion
+        self.txt_neg.setMinimumHeight(50)
+        self.txt_neg.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.txt_neg.setObjectName("neg_prompt")
         
-        top_layout.addWidget(self.txt_pos)
-        top_layout.addWidget(self.txt_neg)
+        # [Fix] Add Stretch factors (Pos: 2, Neg: 1)
+        top_layout.addWidget(self.txt_pos, 2)
+        top_layout.addWidget(self.txt_neg, 1)
         
         top_group.setLayout(top_layout)
         self.main_layout.addWidget(top_group)
@@ -212,26 +213,29 @@ class AdetailerUnitWidget(QWidget):
         def_min_face = (cfg.get('defaults', 'min_face_ratio') or 0.01) * 100.0
         def_max_face = (cfg.get('defaults', 'max_face_ratio') or 1.0) * 100.0
         
+        # [Ref] Revert to 1-Column Layout (User Request)
+        # Row 1: Confidence
         self.add_slider_row(l_det, 1, "신뢰도:", "conf_thresh", 0.0, 1.0, def_conf, 0.01)
-        self.add_slider_row(l_det, 2, "최소(%):", "min_face_ratio", 0.0, 100.0, def_min_face, 0.1) # Default 1%
-        self.add_slider_row(l_det, 3, "최대(%):", "max_face_ratio", 0.0, 100.0, def_max_face, 0.1) # Default 100%
+        # Row 2: Min Area
+        self.add_slider_row(l_det, 2, "최소(%):", "min_face_ratio", 0.0, 100.0, def_min_face, 0.1)
+        # Row 3: Max Area
+        self.add_slider_row(l_det, 3, "최대(%):", "max_face_ratio", 0.0, 100.0, def_max_face, 0.1)
         
         # Sort & Limit
         l_det.addWidget(QLabel("최대 수:"), 4, 0)
         self.spin_top_k = QSpinBox()
         self.spin_top_k.setValue(self.saved_config.get('max_det', cfg.get('defaults', 'max_det') or 20))
+        # [Ref] Compact Width for Max Count
+        self.spin_top_k.setFixedWidth(70)
         l_det.addWidget(self.spin_top_k, 4, 1)
+        
+        # [Fix] Stretch slider column to fill 800-1000px width
+        l_det.setColumnStretch(1, 1)
         
         # [Unified Bottom Section: Single Row for Sort & Checkboxes]
         from PyQt6.QtWidgets import QFrame
         
-        l_bottom_row = QHBoxLayout()
-        l_bottom_row.setContentsMargins(0, 10, 0, 0)
-        l_bottom_row.setSpacing(10)
-        
-        # 1. Sort Controls (Left)
-        l_bottom_row.addWidget(QLabel("정렬:"))
-        
+        # [Ref] Restore Initialization Logic
         self.bg_sort = QButtonGroup(self)
         self.radio_sort_lr = QRadioButton("좌→우"); self.bg_sort.addButton(self.radio_sort_lr)
         self.radio_sort_rl = QRadioButton("우→좌"); self.bg_sort.addButton(self.radio_sort_rl)
@@ -240,10 +244,9 @@ class AdetailerUnitWidget(QWidget):
         self.radio_sort_tb = QRadioButton("위→아래"); self.bg_sort.addButton(self.radio_sort_tb) 
         self.radio_sort_bt = QRadioButton("아래→위"); self.bg_sort.addButton(self.radio_sort_bt)
         self.radio_sort_conf = QRadioButton("신뢰도"); self.bg_sort.addButton(self.radio_sort_conf)
-        
-        # [Fix] Use global default for sort
+
+        # [Ref] Restore Initialization Logic (Check config)
         saved_sort = self.saved_config.get('sort_method', cfg.get('defaults', 'sort_method') or '신뢰도')
-        
         if '좌에서 우' in saved_sort: self.radio_sort_lr.setChecked(True)
         elif '우에서 좌' in saved_sort: self.radio_sort_rl.setChecked(True)
         elif '중앙' in saved_sort: self.radio_sort_center.setChecked(True)
@@ -251,32 +254,51 @@ class AdetailerUnitWidget(QWidget):
         elif '아래에서 위' in saved_sort: self.radio_sort_bt.setChecked(True)
         elif '위에서 아래' in saved_sort: self.radio_sort_tb.setChecked(True)
         else: self.radio_sort_conf.setChecked(True)
+
+        radio_style = "QRadioButton { font-size: 11px; padding: 1px; }" # Slightly smaller for grid
+        chk_style = "QCheckBox { font-size: 12px; padding: 2px; }"
         
-        radio_style = "QRadioButton { font-size: 12px; padding: 2px; }"
         for r in [self.radio_sort_lr, self.radio_sort_rl, self.radio_sort_center, self.radio_sort_area, self.radio_sort_tb, self.radio_sort_bt, self.radio_sort_conf]:
             r.setStyleSheet(radio_style)
-            l_bottom_row.addWidget(r)
             
-        # 2. Vertical Separator
-        v_line = QFrame()
-        v_line.setFrameShape(QFrame.Shape.VLine)
-        v_line.setFrameShadow(QFrame.Shadow.Sunken)
-        l_bottom_row.addWidget(v_line)
-        
-        # 3. Checkboxes (Right)
-        chk_style = "QCheckBox { font-size: 13px; padding: 5px; }"
         self.chk_ignore_edge.setStyleSheet(chk_style)
         self.chk_anatomy.setStyleSheet(chk_style)
         self.chk_pose_rotation.setStyleSheet(chk_style + " color: #8e44ad; font-weight: bold;")
-        
-        l_bottom_row.addWidget(self.chk_ignore_edge)
-        l_bottom_row.addWidget(self.chk_anatomy)
-        l_bottom_row.addWidget(self.chk_pose_rotation)
-        
-        l_bottom_row.addStretch()
 
-        # Add Combined Single Row to Grid (Row 5, Span 4)
-        l_det.addLayout(l_bottom_row, 5, 0, 1, 4)
+        # [Ref] Unified Sort & Filter Group (Vertical Stack for 460px)
+        g_sort_filter = QGroupBox("정렬 배치 및 필터")
+        l_sf = QVBoxLayout()
+        l_sf.setContentsMargins(5, 5, 5, 5)
+        
+        # 1. Sort Grid
+        l_sort_grid = QGridLayout()
+        # Row 0
+        l_sort_grid.addWidget(self.radio_sort_lr, 0, 0)
+        l_sort_grid.addWidget(self.radio_sort_rl, 0, 1)
+        l_sort_grid.addWidget(self.radio_sort_center, 0, 2)
+        l_sort_grid.addWidget(self.radio_sort_conf, 0, 3)
+        # Row 1
+        l_sort_grid.addWidget(self.radio_sort_tb, 1, 0)
+        l_sort_grid.addWidget(self.radio_sort_bt, 1, 1)
+        l_sort_grid.addWidget(self.radio_sort_area, 1, 2)
+        
+        l_sf.addLayout(l_sort_grid)
+        
+        # 2. Checkboxes
+        l_chks = QHBoxLayout()
+        l_chks.addWidget(self.chk_ignore_edge)
+        l_chks.addWidget(self.chk_anatomy)
+        l_chks.addStretch()
+        l_sf.addLayout(l_chks)
+        
+        # Pose Rotation (Long text, own line)
+        l_sf.addWidget(self.chk_pose_rotation)
+
+        # [Fix] Set layout for the group box
+        g_sort_filter.setLayout(l_sf)
+
+        # Add to Main Grid
+        l_det.addWidget(g_sort_filter, 5, 0, 1, 4)
         g_det.setLayout(l_det)
         t1_layout.addWidget(g_det)
         
@@ -287,29 +309,41 @@ class AdetailerUnitWidget(QWidget):
         # Mask Group
         g_mask = QGroupBox("마스크 전처리")
         l_mask = QGridLayout()
+        # [Ref] Revert to 1-Column for Mask
+        # Row 0: Dilation
         self.add_slider_row(l_mask, 0, "확장(Dil):", "mask_dilation", -64, 64, 4, 1)
         self.add_slider_row(l_mask, 1, "침식(Ero):", "mask_erosion", 0, 64, 0, 1)
         self.add_slider_row(l_mask, 2, "블러(Blu):", "mask_blur", 0, 64, 12, 1)
         self.add_slider_row(l_mask, 3, "X 오프셋:", "x_offset", -100, 100, 0, 1)
         self.add_slider_row(l_mask, 4, "Y 오프셋:", "y_offset", -100, 100, 0, 1)
+        
+        l_mask.setVerticalSpacing(2)
+        l_mask.setColumnStretch(1, 1) # [Fix]
+        
         g_mask.setLayout(l_mask)
         t1_layout.addWidget(g_mask)
-        t1_layout.addStretch()
         
-        # SAM Settings (Optional)
+        # [Ref] Move SAM Settings immediately after Mask (User Request)
+        # SAM Settings
         g_sam = QGroupBox("SAM 설정")
         l_sam = QGridLayout()
+        # [Ref] Tighter Vertical Spacing and 1-Column Grid
+        l_sam.setVerticalSpacing(2)
         self.add_slider_row(l_sam, 0, "Points:", "sam_points_per_side", 1, 64, 32, 1)
         self.add_slider_row(l_sam, 1, "IOU:", "sam_pred_iou_thresh", 0.0, 1.0, 0.88, 0.01)
         self.add_slider_row(l_sam, 2, "Stability:", "sam_stability_score_thresh", 0.0, 1.0, 0.95, 0.01)
+        l_sam.setColumnStretch(1, 1) # [Fix]
         g_sam.setLayout(l_sam)
         t1_layout.addWidget(g_sam)
+
+        # Stretch at the end
+        t1_layout.addStretch()
         
         self.tabs.addTab(tab1, "감지 (Detect)")
 
         # --- TAB 2: Inpaint & ControlNet ---
         tab2 = QWidget()
-        t2_layout = QHBoxLayout(tab2) # Horizontal Layout for Columns
+        t2_layout = QVBoxLayout(tab2) # Vertical Layout for Narrow Panel
         
         # Function to ensure tight layout
         def make_tight(layout):
@@ -317,9 +351,11 @@ class AdetailerUnitWidget(QWidget):
             layout.setSpacing(4)
             
         # Left Column: Inpaint & Mask Settings
-        left_widget = QWidget()
-        l_left = QVBoxLayout(left_widget)
-        # l_left.setContentsMargins(0, 0, 0, 0)
+        tab2 = QWidget()
+        t2_layout = QVBoxLayout(tab2)
+        t2_layout.setContentsMargins(5,5,5,5)
+        
+        # [Ref] Flattened Layout (No Left/Right Split)
         
         # Group: Inpaint & Mask
         g_inp = QGroupBox("인페인팅 & 마스크 설정")
@@ -382,9 +418,12 @@ class AdetailerUnitWidget(QWidget):
         def_denoise = cfg.get('defaults', 'denoise') or 0.4
         def_ctx = cfg.get('defaults', 'padding') or 1.0 
         
-        self.add_slider_row(l_inp, 2, "디노이징:", "denoising_strength", 0.0, 1.0, def_denoise, 0.01)
-        self.add_slider_row(l_inp, 3, "문맥확장:", "context_expand_factor", 1.0, 3.0, def_ctx, 0.1)
-        self.add_slider_row(l_inp, 4, "패딩(px):", "crop_padding", 0, 256, 32, 1)
+        self.add_slider_row(l_inp, 2, "Denoise:", "denoising_strength", 0.0, 1.0, def_denoise, 0.01)
+        self.add_slider_row(l_inp, 3, "Context:", "context_expand_factor", 1.0, 3.0, def_ctx, 0.1)
+        self.add_slider_row(l_inp, 4, "Padding:", "crop_padding", 0, 256, 32, 1)
+        
+        l_inp.setVerticalSpacing(2)
+        l_inp.setColumnStretch(1, 1) # [Fix]
 
         # 4. Resolution
         l_res = QHBoxLayout()
@@ -428,15 +467,11 @@ class AdetailerUnitWidget(QWidget):
         
         l_inp.addLayout(l_opts, 6, 0, 1, 3)
         
+        # [Ref] Single Vertical Layout for Tab 2
         g_inp.setLayout(l_inp)
-        l_left.addWidget(g_inp)
-        l_left.addStretch() # Push Up
+        t2_layout.addWidget(g_inp)
         
-        
-        # Right Column: Soft Inpaint & ControlNet
-        right_widget = QWidget()
-        l_right = QVBoxLayout(right_widget)
-        # l_right.setContentsMargins(0, 0, 0, 0)
+        # Group: Soft Inpainting
 
         # Group: Soft Inpainting
         self.g_soft = QGroupBox("Soft Inpainting")
@@ -445,22 +480,43 @@ class AdetailerUnitWidget(QWidget):
         l_soft = QGridLayout()
         
         # Sliders
-        self.add_slider_row(l_soft, 0, "Sched Bias:", "soft_schedule_bias", 0.0, 8.0, 
-                            self.saved_config.get('soft_schedule_bias', 1.0), 0.1)
-        self.add_slider_row(l_soft, 1, "Preserve:", "soft_preservation_strength", 0.0, 1.0, 
-                            self.saved_config.get('soft_preservation_strength', 0.5), 0.05)
-        self.add_slider_row(l_soft, 2, "Contrast:", "soft_transition_contrast", 1.0, 32.0, 
-                            self.saved_config.get('soft_transition_contrast', 4.0), 0.5)
+        def_soft_bias = cfg.get('defaults', 'soft_schedule_bias') or 1.0
+        def_soft_pres = cfg.get('defaults', 'soft_preservation_strength') or 0.5
+        def_soft_cont = cfg.get('defaults', 'soft_transition_contrast') or 4.0
+        
+        # Sliders (1-Column Stack for Clean Layout)
+        # [Ref] Row 0: Bias
+        self.add_slider_row(l_soft, 0, "Bias:", "soft_schedule_bias", 0.0, 8.0, 
+                            self.saved_config.get('soft_schedule_bias', def_soft_bias), 0.1)
+        # [Ref] Row 1: Preserve
+        self.add_slider_row(l_soft, 1, "Pres:", "soft_preservation_strength", 0.0, 1.0, 
+                            self.saved_config.get('soft_preservation_strength', def_soft_pres), 0.05)
+                            
+        # [Ref] Row 2: Contrast
+        self.add_slider_row(l_soft, 2, "Cont:", "soft_transition_contrast", 1.0, 32.0, 
+                            self.saved_config.get('soft_transition_contrast', def_soft_cont), 0.5)
                             
         l_soft.addWidget(QLabel("<b>Pixel Composite</b>"), 3, 0, 1, 3)
-        self.add_slider_row(l_soft, 4, "Mask Infl:", "soft_mask_influence", 0.0, 1.0, 
-                            self.saved_config.get('soft_mask_influence', 0.0), 0.05)
-        self.add_slider_row(l_soft, 5, "Diff Thresh:", "soft_diff_threshold", 0.0, 1.0, 
-                            self.saved_config.get('soft_diff_threshold', 0.5), 0.05)
-        self.add_slider_row(l_soft, 6, "Diff Cont:", "soft_diff_contrast", 0.0, 8.0, 
-                            self.saved_config.get('soft_diff_contrast', 2.0), 0.1)
+        
+        def_soft_infl = cfg.get('defaults', 'soft_mask_influence') or 0.0
+        def_soft_diff = cfg.get('defaults', 'soft_diff_threshold') or 0.5
+        def_soft_dcont = cfg.get('defaults', 'soft_diff_contrast') or 2.0
+        
+        # [Ref] Row 4: Mask Infl
+        self.add_slider_row(l_soft, 4, "Infl:", "soft_mask_influence", 0.0, 1.0, 
+                            self.saved_config.get('soft_mask_influence', def_soft_infl), 0.05)
+        # [Ref] Row 5: Diff Thresh
+        self.add_slider_row(l_soft, 5, "Diff:", "soft_diff_threshold", 0.0, 1.0, 
+                            self.saved_config.get('soft_diff_threshold', def_soft_diff), 0.05)
+                            
+        # [Ref] Row 6: Diff Cont
+        self.add_slider_row(l_soft, 6, "Cont:", "soft_diff_contrast", 0.0, 8.0, 
+                            self.saved_config.get('soft_diff_contrast', def_soft_dcont), 0.1)
+                            
+        l_soft.setVerticalSpacing(2)
+        l_soft.setColumnStretch(1, 1) # [Fix]
         self.g_soft.setLayout(l_soft)
-        l_right.addWidget(self.g_soft)
+        t2_layout.addWidget(self.g_soft)
         
         # Group: ControlNet
         g_cn = QGroupBox("ControlNet")
@@ -488,17 +544,25 @@ class AdetailerUnitWidget(QWidget):
         l_cn.addWidget(self.combo_cn_module, 1, 1)
         
         def_cn_weight = cfg.get('defaults', 'controlnet_weight') or 1.0
-        self.add_slider_row(l_cn, 2, "가중치:", "control_weight", 0.0, 2.0, def_cn_weight, 0.1)
-        self.add_slider_row(l_cn, 3, "시작:", "guidance_start", 0.0, 1.0, 0.0, 0.05)
-        self.add_slider_row(l_cn, 4, "종료:", "guidance_end", 0.0, 1.0, 1.0, 0.05)
+        # [Ref] 1-Column Grid for ControlNet
+        # Row 2: Weight
+        self.add_slider_row(l_cn, 2, "Wgt:", "control_weight", 0.0, 2.0, def_cn_weight, 0.1)
+        # Row 3: Start
+        self.add_slider_row(l_cn, 3, "Start:", "guidance_start", 0.0, 1.0, 0.0, 0.05)
         
+        # Row 4: End
+        self.add_slider_row(l_cn, 4, "End:", "guidance_end", 0.0, 1.0, 1.0, 0.05)
+        
+        l_cn.setVerticalSpacing(2)
+        l_cn.setColumnStretch(1, 1) # [Fix]
         g_cn.setLayout(l_cn)
-        l_right.addWidget(g_cn)
-        l_right.addStretch()
+        t2_layout.addWidget(g_cn)
+        # Final stretch for the whole tab
+        t2_layout.addStretch()
         
-        # Add Columns via Splitter? or just Layout? Layout is safer for strict separation
-        t2_layout.addWidget(left_widget, 1) # Stretch factor 1
-        t2_layout.addWidget(right_widget, 1)
+        # [Ref] Direct Vertical Stack - No Splitter
+        # t2_layout.addWidget(left_widget, 1) 
+        # t2_layout.addWidget(right_widget, 1)
         
         self.tabs.addTab(tab2, "인페인팅 (Inpaint)")
         
@@ -511,29 +575,48 @@ class AdetailerUnitWidget(QWidget):
         l_bmab_main = QVBoxLayout() 
 
         self.chk_bmab_enabled = QCheckBox("활성화 (Enable)")
-        self.chk_bmab_enabled.setChecked(self.saved_config.get('bmab_enabled', True))
+        def_bmab_en = cfg.get('defaults', 'bmab_enabled')
+        if def_bmab_en is None: def_bmab_en = True
+        self.chk_bmab_enabled.setChecked(self.saved_config.get('bmab_enabled', def_bmab_en))
         l_bmab_main.addWidget(self.chk_bmab_enabled)
 
-        # [Ref] BMAB Basic Tab Layout (2 Columns)
+        # [Ref] BMAB Basic Tab Layout (Single Column for 460px)
         l_bmab_grid = QGridLayout()
+        
+        # Defaults
+        def_con = cfg.get('defaults', 'bmab_contrast') or 1.0
+        def_bri = cfg.get('defaults', 'bmab_brightness') or 1.0
+        def_sha = cfg.get('defaults', 'bmab_sharpness') or 1.0
+        def_sat = cfg.get('defaults', 'bmab_color_saturation') or 1.0
+        def_temp= cfg.get('defaults', 'bmab_color_temperature') or 0.0
+        def_na  = cfg.get('defaults', 'bmab_noise_alpha') or 0.0
+        def_naf = cfg.get('defaults', 'bmab_noise_alpha_final') or 0.0
         
         # Column 1
         # Contrast: 0-2 (Default 1)
-        self.add_slider_row(l_bmab_grid, 0, "대비 (Contrast):", "bmab_contrast", 0.0, 2.0, 1.0, 0.05, start_col=0)
+        self.add_slider_row(l_bmab_grid, 0, "대비 (Contrast):", "bmab_contrast", 0.0, 2.0, 
+                            self.saved_config.get('bmab_contrast', def_con), 0.05, start_col=0)
         # Brightness: 0-2 (Default 1)
-        self.add_slider_row(l_bmab_grid, 1, "밝기 (Brightness):", "bmab_brightness", 0.0, 2.0, 1.0, 0.05, start_col=0)
+        self.add_slider_row(l_bmab_grid, 1, "밝기 (Brightness):", "bmab_brightness", 0.0, 2.0, 
+                            self.saved_config.get('bmab_brightness', def_bri), 0.05, start_col=0)
         # Sharpness: -5 to 5 (Default 1) - Ref says 1 default? Code says 1.
-        self.add_slider_row(l_bmab_grid, 2, "선명도 (Sharpness):", "bmab_sharpness", -5.0, 5.0, 1.0, 0.1, start_col=0)
+        self.add_slider_row(l_bmab_grid, 2, "선명도 (Sharpness):", "bmab_sharpness", -5.0, 5.0, 
+                            self.saved_config.get('bmab_sharpness', def_sha), 0.1, start_col=0)
         # Color (Saturation): 0-2 (Default 1)
-        self.add_slider_row(l_bmab_grid, 3, "채도 (Color):", "bmab_color_saturation", 0.0, 2.0, 1.0, 0.01, start_col=0)
+        self.add_slider_row(l_bmab_grid, 3, "채도 (Color):", "bmab_color_saturation", 0.0, 2.0, 
+                            self.saved_config.get('bmab_color_saturation', def_sat), 0.01, start_col=0)
 
-        # Column 2
+        # Continues in single column (Rows 4, 5, 6)
         # Color Temp: -2000 to +2000 (Default 0)
-        self.add_slider_row(l_bmab_grid, 0, "색온도 (Temp):", "bmab_color_temperature", -2000.0, 2000.0, 0.0, 10.0, start_col=2)
+        self.add_slider_row(l_bmab_grid, 4, "색온도 (Temp):", "bmab_color_temperature", -2000.0, 2000.0, 
+                            self.saved_config.get('bmab_color_temperature', def_temp), 10.0, start_col=0)
         # Noise Alpha: 0-1 (Default 0)
-        self.add_slider_row(l_bmab_grid, 1, "노이즈 (Alpha):", "bmab_noise_alpha", 0.0, 1.0, 0.0, 0.01, start_col=2)
+        self.add_slider_row(l_bmab_grid, 5, "노이즈 (Alpha):", "bmab_noise_alpha", 0.0, 1.0, 
+                            self.saved_config.get('bmab_noise_alpha', def_na), 0.01, start_col=0)
         # Noise Alpha Final: 0-1 (Default 0)
-        self.add_slider_row(l_bmab_grid, 2, "노이즈 (Final):", "bmab_noise_alpha_final", 0.0, 1.0, 0.0, 0.01, start_col=2)
+        self.add_slider_row(l_bmab_grid, 6, "노이즈 (Final):", "bmab_noise_alpha_final", 0.0, 1.0, 
+                            self.saved_config.get('bmab_noise_alpha_final', def_naf), 0.01, start_col=0)
+        l_bmab_grid.setColumnStretch(1, 1) # [Fix]
         
         l_bmab_main.addLayout(l_bmab_grid)
         
@@ -541,11 +624,22 @@ class AdetailerUnitWidget(QWidget):
         # but user might still want it here. Let's keep it but slightly separated or in a sub-group)
         self.g_edge = QGroupBox("엣지 강화 (Edge)")
         self.g_edge.setCheckable(True)
-        self.g_edge.setChecked(False) # Collapsed/Disabled by default to match clean Basic tab look
+        def_edge_en = cfg.get('defaults', 'bmab_edge_enabled')
+        if def_edge_en is None: def_edge_en = False
+        self.g_edge.setChecked(bool(self.saved_config.get('bmab_edge_enabled', def_edge_en))) # Collapsed/Disabled by default to match clean Basic tab look
         l_edge = QGridLayout()
-        self.add_slider_row(l_edge, 0, "강도:", "bmab_edge_strength", 0.0, 1.0, 0.0, 0.05)
-        self.add_slider_row(l_edge, 1, "Low:", "bmab_edge_low", 0, 255, 50, 1)
-        self.add_slider_row(l_edge, 2, "High:", "bmab_edge_high", 0, 255, 200, 1)
+        
+        def_edge_str = cfg.get('defaults', 'bmab_edge_strength') or 0.0
+        def_edge_low = cfg.get('defaults', 'bmab_edge_low') or 50
+        def_edge_high = cfg.get('defaults', 'bmab_edge_high') or 200
+        
+        self.add_slider_row(l_edge, 0, "강도:", "bmab_edge_strength", 0.0, 1.0, 
+                            self.saved_config.get('bmab_edge_strength', def_edge_str), 0.05)
+        self.add_slider_row(l_edge, 1, "Low:", "bmab_edge_low", 0, 255, 
+                            self.saved_config.get('bmab_edge_low', def_edge_low), 1)
+        self.add_slider_row(l_edge, 2, "High:", "bmab_edge_high", 0, 255, 
+                            self.saved_config.get('bmab_edge_high', def_edge_high), 1)
+        l_edge.setColumnStretch(1, 1) # [Fix]
         self.g_edge.setLayout(l_edge)
         l_bmab_main.addWidget(self.g_edge)
 
@@ -556,21 +650,29 @@ class AdetailerUnitWidget(QWidget):
         g_comp = QGroupBox("캔버스 확장 (Resize by Person)")
         l_comp = QGridLayout()
         self.chk_resize_enable = QCheckBox("활성화")
-        self.chk_resize_enable.setChecked(self.saved_config.get('resize_enable', False))
+        def_resize_en = cfg.get('defaults', 'resize_enable')
+        if def_resize_en is None: def_resize_en = False
+        self.chk_resize_enable.setChecked(self.saved_config.get('resize_enable', def_resize_en))
         l_comp.addWidget(self.chk_resize_enable, 0, 0)
         
-        self.add_slider_row(l_comp, 1, "목표 비율:", "resize_ratio", 0.1, 1.0, 0.6, 0.05)
+        def_resize_ratio = cfg.get('defaults', 'resize_ratio') or 0.6
+        self.add_slider_row(l_comp, 1, "목표 비율:", "resize_ratio", 0.1, 1.0, 
+                            self.saved_config.get('resize_ratio', def_resize_ratio), 0.05)
         
         self.combo_resize_align = QComboBox(); self.combo_resize_align.addItems(["Center", "Bottom", "Top"])
-        self.combo_resize_align.setCurrentText(self.saved_config.get('resize_align', "Center"))
+        def_resize_align = cfg.get('defaults', 'resize_align') or "Center"
+        self.combo_resize_align.setCurrentText(self.saved_config.get('resize_align', def_resize_align))
         l_comp.addWidget(QLabel("정렬:"), 2, 0)
         l_comp.addWidget(self.combo_resize_align, 2, 1)
         
         # [New] Landscape Detail Feature
         self.chk_landscape_detail = QCheckBox("풍경 속 인물 디테일링 (Landscape)")
         self.chk_landscape_detail.setToolTip("활성화 시, 인물이 작아도(최소 크기 미달이어도) 강제로 디테일링을 수행합니다.")
-        self.chk_landscape_detail.setChecked(self.saved_config.get('bmab_landscape_detail', False))
+        def_land = cfg.get('defaults', 'bmab_landscape_detail')
+        if def_land is None: def_land = False
+        self.chk_landscape_detail.setChecked(self.saved_config.get('bmab_landscape_detail', def_land))
         l_comp.addWidget(self.chk_landscape_detail, 3, 0, 1, 2)
+        l_comp.setColumnStretch(1, 1) # [Fix]
         
         g_comp.setLayout(l_comp)
         t3_layout.addWidget(g_comp)
@@ -631,14 +733,16 @@ class AdetailerUnitWidget(QWidget):
             l_row.addWidget(val_lbl)
             return l_row, slider # Return layout and slider object
 
-        # [Modified] Layout: Left(Sliders) | Right(Graph)
-        l_middle_hbox = QHBoxLayout()
+        # [Modified] Layout: Vertical Stack for 460px width
+        l_middle_hbox = QVBoxLayout()
         
         # Left Side: Sliders
         l_sliders_vbox = QVBoxLayout()
         
         # Row 1: Amount
-        l_amt, self.slider_dd_amount = create_slider("Detail Amount", -1.0, 1.0, 0.01, self.saved_config.get('dd_amount', 0.1))
+        # Row 1: Amount
+        def_dd_amt = cfg.get('defaults', 'dd_amount') or 0.1
+        l_amt, self.slider_dd_amount = create_slider("Detail Amount", -1.0, 1.0, 0.01, self.saved_config.get('dd_amount', def_dd_amt))
         l_sliders_vbox.addLayout(l_amt)
         
         # Grid Controls: Start, End, Start Offset, End Offset, Bias, Exponent
@@ -646,25 +750,32 @@ class AdetailerUnitWidget(QWidget):
         l_dd_grid.setSpacing(10)
 
         # Row 2
-        l_st, self.slider_dd_start = create_slider("Start", 0.0, 1.0, 0.01, self.saved_config.get('dd_start', 0.2))
-        l_ed, self.slider_dd_end = create_slider("End", 0.0, 1.0, 0.01, self.saved_config.get('dd_end', 0.8))
+        def_dd_start = cfg.get('defaults', 'dd_start') or 0.2
+        def_dd_end = cfg.get('defaults', 'dd_end') or 0.8
+        l_st, self.slider_dd_start = create_slider("Start", 0.0, 1.0, 0.01, self.saved_config.get('dd_start', def_dd_start))
+        l_ed, self.slider_dd_end = create_slider("End", 0.0, 1.0, 0.01, self.saved_config.get('dd_end', def_dd_end))
         l_dd_grid.addLayout(l_st, 0, 0)
         l_dd_grid.addLayout(l_ed, 0, 1)
 
         # Row 3
-        l_st_off, self.slider_dd_start_offset = create_slider("Start Offset", -1.0, 1.0, 0.01, self.saved_config.get('dd_start_offset', 0.0))
-        l_ed_off, self.slider_dd_end_offset = create_slider("End Offset", -1.0, 1.0, 0.01, self.saved_config.get('dd_end_offset', 0.0))
+        def_dd_st_off = cfg.get('defaults', 'dd_start_offset') or 0.0
+        def_dd_ed_off = cfg.get('defaults', 'dd_end_offset') or 0.0
+        l_st_off, self.slider_dd_start_offset = create_slider("Start Offset", -1.0, 1.0, 0.01, self.saved_config.get('dd_start_offset', def_dd_st_off))
+        l_ed_off, self.slider_dd_end_offset = create_slider("End Offset", -1.0, 1.0, 0.01, self.saved_config.get('dd_end_offset', def_dd_ed_off))
         l_dd_grid.addLayout(l_st_off, 1, 0)
         l_dd_grid.addLayout(l_ed_off, 1, 1)
         
         # Row 4
-        l_bias, self.slider_dd_bias = create_slider("Bias", 0.0, 1.0, 0.01, self.saved_config.get('dd_bias', 0.5))
-        l_exp, self.slider_dd_exponent = create_slider("Exponent", 0.0, 10.0, 0.05, self.saved_config.get('dd_exponent', 1.0))
+        def_dd_bias = cfg.get('defaults', 'dd_bias') or 0.5
+        def_dd_exp = cfg.get('defaults', 'dd_exponent') or 1.0
+        l_bias, self.slider_dd_bias = create_slider("Bias", 0.0, 1.0, 0.01, self.saved_config.get('dd_bias', def_dd_bias))
+        l_exp, self.slider_dd_exponent = create_slider("Exponent", 0.0, 10.0, 0.05, self.saved_config.get('dd_exponent', def_dd_exp))
         l_dd_grid.addLayout(l_bias, 2, 0)
         l_dd_grid.addLayout(l_exp, 2, 1)
         
         # Row 5 (Fade)
-        l_fade, self.slider_dd_fade = create_slider("Fade", 0.0, 1.0, 0.05, self.saved_config.get('dd_fade', 0.0))
+        def_dd_fade = cfg.get('defaults', 'dd_fade') or 0.0
+        l_fade, self.slider_dd_fade = create_slider("Fade", 0.0, 1.0, 0.05, self.saved_config.get('dd_fade', def_dd_fade))
         l_dd_grid.addLayout(l_fade, 3, 0)
         
         l_sliders_vbox.addLayout(l_dd_grid)
@@ -678,7 +789,9 @@ class AdetailerUnitWidget(QWidget):
         
         # Smooth Checkbox (Bottom of Graph)
         self.chk_dd_smooth = QCheckBox("Smooth")
-        self.chk_dd_smooth.setChecked(self.saved_config.get('dd_smooth', True)) # Default: True
+        def_dd_smooth = cfg.get('defaults', 'dd_smooth')
+        if def_dd_smooth is None: def_dd_smooth = True
+        self.chk_dd_smooth.setChecked(self.saved_config.get('dd_smooth', def_dd_smooth))
         l_right_vbox.addWidget(self.chk_dd_smooth)
         
         l_middle_hbox.addLayout(l_right_vbox, stretch=4) # Graph takes 40%
@@ -708,9 +821,9 @@ class AdetailerUnitWidget(QWidget):
         l_more = QGridLayout()
         
         # Numeric Inputs (SpinBoxes)
-        self.spin_dd_amount = QDoubleSpinBox(); self.spin_dd_amount.setRange(-2.0, 2.0); self.spin_dd_amount.setSingleStep(0.01); self.spin_dd_amount.setValue(self.saved_config.get('dd_amount', 0.1))
-        self.spin_dd_st_off = QDoubleSpinBox(); self.spin_dd_st_off.setRange(-2.0, 2.0); self.spin_dd_st_off.setSingleStep(0.01); self.spin_dd_st_off.setValue(self.saved_config.get('dd_start_offset', 0.0))
-        self.spin_dd_ed_off = QDoubleSpinBox(); self.spin_dd_ed_off.setRange(-2.0, 2.0); self.spin_dd_ed_off.setSingleStep(0.01); self.spin_dd_ed_off.setValue(self.saved_config.get('dd_end_offset', 0.0))
+        self.spin_dd_amount = QDoubleSpinBox(); self.spin_dd_amount.setRange(-2.0, 2.0); self.spin_dd_amount.setSingleStep(0.01); self.spin_dd_amount.setValue(self.saved_config.get('dd_amount', def_dd_amt))
+        self.spin_dd_st_off = QDoubleSpinBox(); self.spin_dd_st_off.setRange(-2.0, 2.0); self.spin_dd_st_off.setSingleStep(0.01); self.spin_dd_st_off.setValue(self.saved_config.get('dd_start_offset', def_dd_st_off))
+        self.spin_dd_ed_off = QDoubleSpinBox(); self.spin_dd_ed_off.setRange(-2.0, 2.0); self.spin_dd_ed_off.setSingleStep(0.01); self.spin_dd_ed_off.setValue(self.saved_config.get('dd_end_offset', def_dd_ed_off))
         
         l_more.addWidget(QLabel("Amount"), 0, 0); l_more.addWidget(self.spin_dd_amount, 1, 0)
         l_more.addWidget(QLabel("Start Offset"), 0, 1); l_more.addWidget(self.spin_dd_st_off, 1, 1)
@@ -719,7 +832,8 @@ class AdetailerUnitWidget(QWidget):
         # Mode Dropdown
         self.combo_dd_mode = QComboBox()
         self.combo_dd_mode.addItems(["both", "cond", "uncond"])
-        self.combo_dd_mode.setCurrentText(self.saved_config.get('dd_mode', "both"))
+        def_dd_mode = cfg.get('defaults', 'dd_mode') or "both"
+        self.combo_dd_mode.setCurrentText(self.saved_config.get('dd_mode', def_dd_mode))
         
         l_more.addWidget(QLabel("모드 (Mode)"), 0, 3); l_more.addWidget(self.combo_dd_mode, 1, 3)
         
@@ -782,29 +896,37 @@ class AdetailerUnitWidget(QWidget):
             if saved_sampler_full.endswith(s): found_sch = s; found_sam = saved_sampler_full.replace(s, "").strip(); break
         self.combo_sep_sampler.setCurrentText(found_sam)
         self.combo_sep_scheduler.setCurrentText(found_sch)
-        
         l_adv.addWidget(self.chk_sep_sampler, 1, 0)
         l_adv.addWidget(self.combo_sep_sampler, 1, 1)
         l_adv.addWidget(self.combo_sep_scheduler, 1, 2)
+        l_adv.setColumnStretch(1, 1) # [Fix] Expand combo column
+        l_adv.setColumnStretch(2, 1) # Expand scheduler too
         
-        # Steps/CFG/Clip
-        l_sub = QHBoxLayout()
+        # Steps/CFG/Clip (Split into two rows for 1-column compatibility)
+        l_sub1 = QHBoxLayout(); make_tight(l_sub1)
         self.chk_sep_steps=QCheckBox("Steps"); self.chk_sep_steps.setChecked(self.saved_config.get('sep_steps', False))
         self.spin_sep_steps=QSpinBox(); self.spin_sep_steps.setValue(self.saved_config.get('steps', 20))
         self.chk_sep_cfg=QCheckBox("CFG"); self.chk_sep_cfg.setChecked(self.saved_config.get('sep_cfg', False))
         self.spin_sep_cfg=QDoubleSpinBox(); self.spin_sep_cfg.setValue(self.saved_config.get('cfg_scale', 7.0))
+        l_sub1.addWidget(self.chk_sep_steps); l_sub1.addWidget(self.spin_sep_steps)
+        l_sub1.addWidget(self.chk_sep_cfg); l_sub1.addWidget(self.spin_sep_cfg)
+        l_adv.addLayout(l_sub1, 2, 0, 1, 4)
+        
+        l_sub2 = QHBoxLayout(); make_tight(l_sub2)
         self.chk_sep_clip=QCheckBox("Clip"); self.chk_sep_clip.setChecked(self.saved_config.get('sep_clip', False))
         self.spin_clip=QSpinBox(); self.spin_clip.setRange(1,12); self.spin_clip.setValue(self.saved_config.get('clip_skip', 2))
-        
-        l_sub.addWidget(self.chk_sep_steps); l_sub.addWidget(self.spin_sep_steps)
-        l_sub.addWidget(self.chk_sep_cfg); l_sub.addWidget(self.spin_sep_cfg)
-        l_sub.addWidget(self.chk_sep_clip); l_sub.addWidget(self.spin_clip)
-        l_adv.addLayout(l_sub, 2, 0, 1, 4)
-        
+        l_sub2.addWidget(self.chk_sep_clip); l_sub2.addWidget(self.spin_clip)
         self.chk_sep_noise = QCheckBox("Sep Noise"); self.chk_sep_noise.setChecked(self.saved_config.get('sep_noise', False))
         self.chk_restore_face = QCheckBox("Restore Face"); self.chk_restore_face.setChecked(self.saved_config.get('restore_face', False))
-        l_adv.addWidget(self.chk_sep_noise, 3, 0)
-        l_adv.addWidget(self.chk_restore_face, 3, 1, 1, 2)
+        l_sub2.addWidget(self.chk_sep_noise)
+        l_sub2.addWidget(self.chk_restore_face)
+        l_adv.addLayout(l_sub2, 3, 0, 1, 4)
+        
+        # [New] Restore Strength Slider (Row 4)
+        def_restore = cfg.get('defaults', 'restore_face_strength') or 1.0
+        # Use a full row for the slider to align with 1-column style
+        self.add_slider_row(l_adv, 4, "얼굴복원강도:", "restore_face_strength", 0.0, 1.0, 
+                            def_restore, 0.05, start_col=0)
         
         g_adv.setLayout(l_adv)
         t4_layout.addWidget(g_adv)
@@ -834,14 +956,19 @@ class AdetailerUnitWidget(QWidget):
         l_hires.addWidget(self.combo_hires_upscaler, 1, 1, 1, 3)
         
         # Row 2: Upscale Factor (Slider)
+        def_hires_up = cfg.get('defaults', 'hires_upscale_factor') or 1.5
         self.add_slider_row(l_hires, 2, "Upscale Factor", 'hires_upscale_factor', 1.0, 4.0, 
-                            self.saved_config.get('hires_upscale_factor', 1.5), 0.05)
+                            def_hires_up, 0.05)
                             
         # Row 3: Hires Steps, Denoise
+        def_hires_steps = cfg.get('defaults', 'hires_steps') or 14
+        def_hires_denoise = cfg.get('defaults', 'hires_denoise') or 0.4
+        
         self.add_slider_row(l_hires, 3, "Hires Steps", 'hires_steps', 0, 50, 
-                            self.saved_config.get('hires_steps', 14), 1)
+                            def_hires_steps, 1)
         self.add_slider_row(l_hires, 4, "Denoise Strength", 'hires_denoise', 0.01, 1.0, 
-                            self.saved_config.get('hires_denoise', 0.4), 0.01)
+                            def_hires_denoise, 0.01)
+        l_hires.setColumnStretch(1, 1) # [Fix] Stretch slider
 
         # Row 4: Width/Height Override (0=Auto)
         l_hires.addWidget(QLabel("Width (0=Auto)"), 5, 0)
@@ -867,8 +994,9 @@ class AdetailerUnitWidget(QWidget):
         l_hires.addWidget(self.spin_hires_h, 5, 3)
 
         # Row 5: Hires CFG
+        def_hires_cfg = cfg.get('defaults', 'hires_cfg') or 5.0
         self.add_slider_row(l_hires, 6, "Hires CFG Scale", 'hires_cfg', 1.0, 30.0, 
-                            self.saved_config.get('hires_cfg', 5.0), 0.5)
+                            def_hires_cfg, 0.5)
 
         g_hires.setLayout(l_hires)
         t4_layout.addWidget(g_hires)
@@ -888,7 +1016,12 @@ class AdetailerUnitWidget(QWidget):
 
     def add_slider_row(self, layout, row, label_text, key, min_val, max_val, default_val, step, start_col=0):
         label = QLabel(label_text)
+        # [Fix] Fixed Label Width for consistent alignment (Increased to 130px for bilingual labels)
+        label.setFixedWidth(130) 
+        
         slider = QSlider(Qt.Orientation.Horizontal)
+        # [Fix] Expand slider to fill space
+        slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         
         loaded_val = self.saved_config.get(key, default_val)
         
@@ -905,30 +1038,38 @@ class AdetailerUnitWidget(QWidget):
             
         spin.setRange(min_val, max_val)
         spin.setSingleStep(step)
-        # [Fix] Increased width to prevent text cutoff (was 60)
-        spin.setFixedWidth(80)
+        # [Fix] Fixed Spinbox Width (User Requested 70px)
+        spin.setFixedWidth(70) 
         
         spin.setValue(loaded_val)
         slider.setValue(int(loaded_val * scale))
         
-        # [Fix] 슬라이더 -> 스핀박스 (타입 에러 방지)
         if is_float:
             slider.valueChanged.connect(lambda v: spin.setValue(v / scale))
         else:
             slider.valueChanged.connect(lambda v: spin.setValue(int(v / scale)))
             
         # Add to layout
-        # Label (col), Slider (col+1), Spin (col+2)
-        layout.addWidget(label, row, start_col)
-        layout.addWidget(slider, row, start_col + 1)
-        layout.addWidget(spin, row, start_col + 2) # [Fix] Uses SpinBox instead of Label for value
+        # [Ref] Revert to simple 3-column row (Label, Slider, Spinbox)
+        layout.addWidget(label, row, 0)
+        layout.addWidget(slider, row, 1)
+        layout.addWidget(spin, row, 2)
             
+        # 스핀박스 -> 슬라이더 (값 변경 시 즉시 반영)
         # 스핀박스 -> 슬라이더 (값 변경 시 즉시 반영)
         spin.valueChanged.connect(lambda v: slider.setValue(int(v * scale)))
         
-        layout.addWidget(label, row, start_col)
-        layout.addWidget(slider, row, start_col + 1)
-        layout.addWidget(spin, row, start_col + 2)
+        # Note: addWidget called above, don't duplicate. 
+        # The original code had duplicate addWidget calls? 
+        # Yes, lines 1004-1006 were duplicates of 997-999 in previous context.
+        # I will remove them here by replacing with empty/nothing if I am encompassing them.
+        # My target block ends at 1006, so I am replacing the duplication too.
+        # Wait, I should double check if I am breaking grid logic.
+        # The previous code:
+        # 997: layout.addWidget...
+        # ...
+        # 1004: layout.addWidget... (Duplicate!)
+        # So I will just NOT include the duplicate widgets.
         
         self.settings[key] = {
             'widget': spin,
@@ -1030,14 +1171,23 @@ class AdetailerUnitWidget(QWidget):
         
         # [Fix] Manual Reset for DD Sliders (not in self.settings)
         # We set sliders, which syncs to spinboxes via signal
-        self.slider_dd_amount.setValue(10) # 0.1
-        self.slider_dd_start.setValue(20) # 0.2
-        self.slider_dd_end.setValue(80) # 0.8
-        self.slider_dd_start_offset.setValue(0)
-        self.slider_dd_end_offset.setValue(0)
-        self.slider_dd_bias.setValue(50) # 0.5
-        self.slider_dd_exponent.setValue(100) # 1.0
-        self.slider_dd_fade.setValue(0)
+        def_dd_amt = cfg.get('defaults', 'dd_amount') or 0.1
+        def_dd_start = cfg.get('defaults', 'dd_start') or 0.2
+        def_dd_end = cfg.get('defaults', 'dd_end') or 0.8
+        def_dd_st_off = cfg.get('defaults', 'dd_start_offset') or 0.0
+        def_dd_ed_off = cfg.get('defaults', 'dd_end_offset') or 0.0
+        def_dd_bias = cfg.get('defaults', 'dd_bias') or 0.5
+        def_dd_exp = cfg.get('defaults', 'dd_exponent') or 1.0
+        def_dd_fade = cfg.get('defaults', 'dd_fade') or 0.0
+        
+        self.slider_dd_amount.setValue(int(def_dd_amt * 100))
+        self.slider_dd_start.setValue(int(def_dd_start * 100))
+        self.slider_dd_end.setValue(int(def_dd_end * 100))
+        self.slider_dd_start_offset.setValue(int(def_dd_st_off * 100))
+        self.slider_dd_end_offset.setValue(int(def_dd_ed_off * 100))
+        self.slider_dd_bias.setValue(int(def_dd_bias * 100))
+        self.slider_dd_exponent.setValue(int(def_dd_exp * 100))
+        self.slider_dd_fade.setValue(int(def_dd_fade * 100))
         
         # BMAB
         self.chk_bmab_enabled.setChecked(True)
@@ -1222,7 +1372,21 @@ class AdetailerUnitWidget(QWidget):
             
             'restore_face': self.chk_restore_face.isChecked(),
             'use_hires_fix': self.chk_hires.isChecked(),
+            'use_hires_fix': self.chk_hires.isChecked(),
             'sep_noise': self.chk_sep_noise.isChecked(),
+            
+            # [New] Detail Daemon Params
+            'dd_enabled': self.chk_dd_active.isChecked(),
+            'dd_start': self.slider_dd_start.value() / 100.0,
+            'dd_end': self.slider_dd_end.value() / 100.0,
+            'dd_amount': self.slider_dd_amount.value() / 100.0,
+            'dd_bias': self.slider_dd_bias.value() / 100.0,
+            'dd_exponent': self.slider_dd_exponent.value() / 100.0,
+            'dd_start_offset': self.slider_dd_start_offset.value() / 100.0,
+            'dd_end_offset': self.slider_dd_end_offset.value() / 100.0,
+            'dd_fade': self.slider_dd_fade.value() / 100.0,
+            'dd_smooth': self.chk_dd_smooth.isChecked(),
+            'dd_mode': self.combo_dd_mode.currentText(),
         }
 
         # 슬라이더 값들 병합 (Max Face Ratio 등 포함)

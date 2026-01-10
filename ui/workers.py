@@ -32,8 +32,7 @@ def worker_process(device_id, input_queue, output_queue, configs):
     """
     worker_id = device_id
     
-    # [Fix] Force-clear CUDA_VISIBLE_DEVICES to ensure multiple GPUs are visible
-    # On Windows/Multiprocessing, sometimes this env var gets inherited or set implicitly to 0.
+    # [Fix] Force-clear CUDA_VISIBLE_DEVICES if inherited
     if "CUDA_VISIBLE_DEVICES" in os.environ:
         del os.environ["CUDA_VISIBLE_DEVICES"]
 
@@ -42,7 +41,6 @@ def worker_process(device_id, input_queue, output_queue, configs):
 
     try:
         # [MP] 프로세스 별로 ImageProcessor 초기화 (독립 메모리)
-        # 로그는 큐를 통해 메인 프로세스로 전달
         def log_wrapper(msg):
             output_queue.put(("log", f"[{worker_id}] {msg}"))
             
@@ -62,49 +60,42 @@ def worker_process(device_id, input_queue, output_queue, configs):
         if "cuda" in device_id:
             try:
                 # [Debug] Worker Process GPU Diagnostics
-                # Force torch to initialize CUDA to check actual visibility
                 if not torch.cuda.is_available():
-                     print(f"[Worker] torch.cuda.is_available() returned False inside worker {worker_id}")
                      raise RuntimeError("CUDA not available in worker process")
 
                 local_device_count = torch.cuda.device_count()
-                req_idx = int(device_id.split(':')[1])
+                
+                # [Fix] Direct Device Selection
+                # We attempt to use the requested device ID directly.
+                # We do NOT isolate using env vars to avoid Windows import timing issues.
+                # We trust start_processing passed a valid index (e.g. cuda:1).
+                
+                try:
+                    target_idx = int(device_id.split(':')[1])
+                except:
+                    target_idx = 0
                 
                 print(f"[Worker {worker_id}] Diagnostic Start:")
                 print(f"  - PID: {os.getpid()}")
                 print(f"  - Device Count: {local_device_count}")
-                
-                # [Fix] Adaptive Device Selection
-                # If we see multiple GPUs, trust the requested index (e.g. cuda:1 -> cuda:1).
-                # If we see only 1 GPU (Isolation), map any request to cuda:0.
-                final_device_id = device_id
-                
-                if req_idx < local_device_count:
-                    final_device_id = f"cuda:{req_idx}"
-                elif local_device_count == 1:
-                    print(f"[Worker] Warning: Requested {device_id} but only 1 device visible. Mapping to cuda:0.")
-                    final_device_id = "cuda:0"
-                else:
-                    raise RuntimeError(f"Requested {device_id} but only {local_device_count} devices found.")
-                
-                device_id = final_device_id
+                print(f"  - Target Index: {target_idx}")
 
-                # [Fix] Explicitly set device for this process context
-                torch.cuda.set_device(device_id)
+                # Force usage of requested device
+                torch.cuda.set_device(target_idx)
+                
                 current_dev = torch.cuda.current_device()
                 current_dev_name = torch.cuda.get_device_name(current_dev)
                 
                 msg = f"GPU Bound: {device_id} -> Actual: {current_dev} ({current_dev_name})"
                 print(f"[Worker] {msg}")
-                log_wrapper(msg) # Send to UI log as well
+                log_wrapper(msg) 
 
                 t = torch.tensor([1.0]).to(device_id)
                 del t
-                print(f"[Worker] GPU Check Passed for {device_id} (Originally: {worker_id})")
             except Exception as e:
-                err_msg = f"Error: Device {device_id} is invalid ({e}). Falling back to CPU."
+                err_msg = f"Error: Device {device_id} init failed ({e}). Falling back to CPU."
                 log_wrapper(err_msg)
-                print(f"[Worker Error] {err_msg}") # Print to terminal for visibility
+                print(f"[Worker Error] {err_msg}") 
                 device_id = "cpu"
 
         processor = ImageProcessor(device_id, log_callback=log_wrapper, preview_callback=preview_wrapper)
@@ -236,35 +227,51 @@ class ProcessingController(QObject):
         self.total_files = len(file_paths)
         self.processed_count = 0
 
-    def start_processing(self):
+    def start_processing(self, max_workers=1):
         # 작업 큐 채우기
         for f in self.file_paths:
             self.input_queue.put(f)
 
         if torch.cuda.is_available():
-            gpu_count = torch.cuda.device_count()
-            self.log_signal.emit(f"[System] Detected {gpu_count} NVIDIA GPUs. Starting Multiprocessing...")
-            for i in range(gpu_count):
+            real_gpu_count = torch.cuda.device_count()
+            self.log_signal.emit(f"[System] Detected {real_gpu_count} NVIDIA GPUs. Target Workers: {max_workers}")
+            
+            # [Multi-GPU / Multi-Worker Logic]
+            # If max_workers > real_gpu_count, we distribute workers across GPUs (Round-Robin).
+            # e.g. 2 GPUs, 4 Workers -> Worker 0(GPU0), Worker 1(GPU1), Worker 2(GPU0), Worker 3(GPU1)
+            
+            for i in range(max_workers):
+                gpu_idx = i % real_gpu_count
+                dev_id = f"cuda:{gpu_idx}"
+                
+                # Check actual device name for log
                 try:
-                    name = torch.cuda.get_device_name(i)
-                    self.log_signal.emit(f"  - GPU {i}: {name}")
+                    name = torch.cuda.get_device_name(gpu_idx)
                 except:
-                    self.log_signal.emit(f"  - GPU {i}: Unknown Device")
+                    name = "Unknown Device"
+                    
+                p = mp.Process(
+                    target=worker_process, 
+                    args=(dev_id, self.input_queue, self.output_queue, self.configs),
+                    daemon=True
+                )
+                p.start()
+                self.processes.append(p)
+                self.log_signal.emit(f"[Manager] Started Worker {i+1}/{max_workers} (PID: {p.pid}) on {dev_id} ({name})")
+                
         else:
-            gpu_count = 1
-            self.log_signal.emit("[System] No GPU detected. Using CPU via Multiprocessing.")
-
-        # 워커 프로세스 시작
-        for i in range(gpu_count):
-            dev_id = f"cuda:{i}" if torch.cuda.is_available() else "cpu"
-            p = mp.Process(
-                target=worker_process, 
-                args=(dev_id, self.input_queue, self.output_queue, self.configs),
-                daemon=True # 메인 프로세스 종료 시 함께 종료
-            )
-            p.start()
-            self.processes.append(p)
-            self.log_signal.emit(f"[Manager] Started Worker Process {i} (PID: {p.pid}) on {dev_id}")
+            # CPU Mode
+            self.log_signal.emit(f"[System] No GPU detected. Starting {max_workers} CPU Workers.")
+            for i in range(max_workers):
+                dev_id = "cpu"
+                p = mp.Process(
+                    target=worker_process, 
+                    args=(dev_id, self.input_queue, self.output_queue, self.configs),
+                    daemon=True
+                )
+                p.start()
+                self.processes.append(p)
+                self.log_signal.emit(f"[Manager] Started CPU Worker {i+1} (PID: {p.pid})")
             
         # Start Polling Timer (Time interval 50ms)
         self.timer.start(50)

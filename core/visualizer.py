@@ -9,6 +9,9 @@ def draw_detections(image, detections):
     vis_img = image.copy()
     overlay = vis_img.copy()
     
+    # [Debug]
+    print(f"[Visualizer] Drawing {len(detections)} detections on image shape {image.shape}")
+    
     # 텍스트 및 선 설정
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 0.6
@@ -69,7 +72,8 @@ def draw_detections(image, detections):
         cv2.rectangle(vis_img, (x1, y1), (x2, y2), color, thickness)
         
         # 라벨 그리기
-        label = f"#{i+1} {conf:.2f}" 
+        label_text = det.get('label_name', f"#{i+1}")
+        label = f"{label_text} {conf:.2f}" 
         
         # [New] LoRA 정보 표시 (확장자 제거 및 간략화)
         lora_names = det.get('lora_names', [])

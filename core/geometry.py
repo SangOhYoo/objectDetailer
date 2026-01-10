@@ -138,8 +138,11 @@ def restore_and_paste(base_image, processed_crop, M, mask_blur=12, paste_mask=No
     warped_mask = cv2.warpAffine(mask, M_inv, (w, h), flags=cv2.INTER_LINEAR)
     
     # 4. 마스크 블러링 (Soft Edge)
-    # paste_mask가 없을 때만 강제 블러 적용 (paste_mask는 이미 블러 처리됨)
-    if paste_mask is None and mask_blur > 0:
+    # [Fix] Seams 제거: paste_mask 유무와 상관없이 최종 마스크에 블러를 적용해야 합성이 자연스럽습니다.
+    # Inverse Warping 과정에서 Aliasing이 발생할 수 있기 때문입니다.
+    # 단, paste_mask가 있을 경우, 이미 블러가 되어 있을 수 있으므로 mask_blur 값의 절반 정도만 적용하거나 그대로 적용합니다.
+    # 여기서는 설정된 mask_blur를 강제로 적용합니다. 
+    if mask_blur > 0:
         warped_mask = cv2.GaussianBlur(warped_mask, (mask_blur*2+1, mask_blur*2+1), 0)
     
     # 5. 알파 블렌딩

@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 import torch
+import gc
 from ultralytics import YOLO
 import threading
 
@@ -50,6 +51,36 @@ class ObjectDetector:
         self.mp_face_mesh = None
         self.face_analysis = None
 
+    def offload_models(self):
+        """
+        [Fix] Free up VRAM by moving models to CPU or deleting them.
+        """
+        # 1. Access yolo_models (Thread-safe?)
+        # Just clear them. YOLO loading is fast enough.
+        if self.yolo_models:
+            print(f"[Detector] Offloading {len(self.yolo_models)} YOLO models...")
+            # Ultralytics models usually stay in VRAM.
+            # Explicitly deleting might help.
+            self.yolo_models.clear()
+            
+        # 2. InsightFace
+        if self.face_analysis:
+            print("[Detector] Offloading InsightFace...")
+            del self.face_analysis
+            self.face_analysis = None
+            
+        # 3. MediaPipe
+        if self.mp_face_mesh:
+            self.mp_face_mesh.close()
+            self.mp_face_mesh = None
+            
+        if hasattr(self, 'mp_pose') and self.mp_pose:
+            self.mp_pose.close()
+            self.mp_pose = None
+            
+        gc.collect()
+        torch.cuda.empty_cache()
+
     def detect(self, image: np.ndarray, model_name: str, conf: float = 0.3, classes: str = None) -> list:
         if "mediapipe" in model_name.lower():
             return self._detect_mediapipe(image, model_name)
@@ -77,7 +108,7 @@ class ObjectDetector:
             
             # [Fix] Accelerate 'init_empty_weights' hook bypass using Thread
             def _load_yolo():
-                self.yolo_models[model_name] = YOLO(load_target, task='detect')
+                self.yolo_models[model_name] = YOLO(load_target)
             
             t = threading.Thread(target=_load_yolo)
             t.start()
@@ -126,8 +157,18 @@ class ObjectDetector:
                     except:
                         pass
             
+            # [New] Debugging Model Task
+            print(f"[Detector] YOLO Task: {model.task}")
+
+            # [New] Dynamic Inference Size
+            # Models with '1024' or '1280' in name often require higher resolution
+            infer_sz = 640
+            if "1024" in model_name: infer_sz = 1024
+            if "1280" in model_name: infer_sz = 1280
+            print(f"[Detector] Inference Resolution: {infer_sz}")
+
             with no_dispatch():
-                results = model.predict(image, conf=conf, device=device_arg, verbose=False, classes=target_classes_arg)
+                results = model.predict(image, conf=conf, device=device_arg, verbose=False, classes=target_classes_arg, imgsz=infer_sz)
         except (NotImplementedError, RuntimeError) as e:
             # [Fix] Meta tensor error handling (accelerate conflict)
             print(f"[Detector] Warning: Inference failed ({e}). Attempting CPU fallback for {model_name}.")
@@ -145,7 +186,7 @@ class ObjectDetector:
                 # Threading fix for fallback as well
                 fallback_result = {}
                 def _reload_yolo():
-                    fallback_result['model'] = YOLO(load_target, task='detect')
+                    fallback_result['model'] = YOLO(load_target)
                 t = threading.Thread(target=_reload_yolo)
                 t.start()
                 t.join()
@@ -161,7 +202,7 @@ class ObjectDetector:
             except Exception as e:
                 print(f"[Detector] CPU inference also failed (Skipping detection): {e}")
                 return []
-        
+
         detections = []
         for result in results:
             boxes = result.boxes.xyxy.cpu().numpy()
@@ -171,6 +212,9 @@ class ObjectDetector:
             masks = None
             if result.masks is not None and hasattr(result.masks, 'data'):
                 masks = result.masks.data.cpu().numpy()
+                print(f"[Detector] Masks Found! shape: {masks.shape}")
+            else:
+                print(f"[Detector] No masks in result. result.masks: {result.masks}")
 
             for i, box in enumerate(boxes):
                 x1, y1, x2, y2 = map(int, box)
@@ -180,6 +224,12 @@ class ObjectDetector:
                     'label': int(cls_ids[i]),
                     'mask': None
                 }
+                
+                # [New] Inject Class Name
+                if hasattr(model, 'names') and det['label'] in model.names:
+                    det['label_name'] = model.names[det['label']]
+                else:
+                    det['label_name'] = str(det['label'])
                 
                 # YOLO Segmentation Mask Processing
                 if masks is not None and i < len(masks):
@@ -193,10 +243,7 @@ class ObjectDetector:
         # [Debug] Log detections
         print(f"[Detector] Model: {model_name} | Detected: {len(detections)} objects")
         for i, det in enumerate(detections):
-            class_name = str(det['label'])
-            if hasattr(model, 'names') and det['label'] in model.names:
-                class_name = model.names[det['label']]
-            print(f"  - [{i+1}] Class: {class_name} ({det['label']}), Conf: {det['conf']:.4f}, Box: {det['box']}")
+            print(f"  - [{i+1}] Class: {det.get('label_name')} ({det['label']}), Conf: {det['conf']:.4f}, Box: {det['box']}")
         
         return detections
 

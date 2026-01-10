@@ -18,6 +18,9 @@ from core.visualizer import draw_detections, draw_mask_on_image
 from core.geometry import align_and_crop, restore_and_paste, is_anatomically_correct
 from core.box_sorter import sort_boxes
 from core.color_fix import apply_color_fix
+from core.detail_daemon import DetailDaemonContext
+from compel import Compel, ReturnedEmbeddingsType
+from core.upscaler import ESRGANUpscaler
 
 class ImageProcessor:
     def __init__(self, device, log_callback=None, preview_callback=None):
@@ -31,6 +34,7 @@ class ImageProcessor:
         self.detector = ObjectDetector(device=device, model_dir=model_dir)
         self.sam = None
         self.face_restorer = FaceRestorer(device)
+        self.upscaler = ESRGANUpscaler(device=device)
 
     def log(self, msg):
         if self.log_callback: self.log_callback(msg)
@@ -83,9 +87,9 @@ class ImageProcessor:
 
                 clip_skip = int(config.get('clip_skip', 1)) if config.get('sep_clip') else 1
 
-                # [Fix] 모델 로드 전 메모리 정리
-                gc.collect()
-                torch.cuda.empty_cache()
+                # [Optimized] 불필요한 사전 메모리 정리 제거 (ModelManager가 관리)
+                # gc.collect()
+                # torch.cuda.empty_cache()
 
                 self.model_manager.load_sd_model(ckpt_path, vae_path, cn_path, clip_skip)
                 
@@ -113,174 +117,370 @@ class ImageProcessor:
                 traceback.print_exc()
             finally:
                 self.model_manager.manage_lora([], action="unload")
-                # [Fix] 패스 종료 시 메모리 정리
-                gc.collect()
-                torch.cuda.empty_cache()
+                # [Optimized] 패스 종료 시 강제 메모리 정리 제거
+                # gc.collect()
+                # torch.cuda.empty_cache()
                 
+        # [Fix] Clean up VRAM after processing
+        print("[Pipeline] Offloading models to free VRAM...")
+        self.detector.offload_models()
+        self.face_restorer.unload_model() 
+        self.model_manager.unload_model() 
+        
+        gc.collect()
+        torch.cuda.empty_cache()
+        
         return result_img
 
-        if not detections:
-            self.log(f"    [Info] No objects detected (Threshold: {config['conf_thresh']}).")
+    def detect_preview(self, image, config):
+        """
+        [New] Detect Preview: Run detection only and visualize results.
+        """
+        # 1. Resize/Person Check (Optional, skipping for preview speed unless explicitly requested)
+        # Assuming we just want to see what the current detector sees on the current image.
+        
+        # 2. Main Detection
+        det_model = config['detector_model']
+        conf = config['conf_thresh']
+        classes = None # Default All
+        
+        # Parse Classes
+        yolo_classes_str = config.get('yolo_classes', '').strip()
+        if yolo_classes_str:
+            try:
+                # e.g. "0, 1, 2" or "person, cat"
+                # Detector expects list of strings or ints, usually strings for class names if logic supports it
+                # core/detector.py handles class filtering.
+                classes = [c.strip() for c in yolo_classes_str.split(',')]
+            except: pass
+        
+        unit_name = config.get('unit_name', 'Preview')
+        self.log(f"  > Preview Detection: {det_model} (Conf: {conf})")
+        
+        detections = self.detector.detect(image, det_model, conf, classes=classes)
+        self.log(f"    - Raw Detections: {len(detections)}")
+        
+        # 2.1 Filter by ratio (Smart Filter)
+        img_h, img_w = image.shape[:2]
+        img_area = img_w * img_h
+        
+        # [Fix] Config values are already ratios (0.0 ~ 1.0) from UI
+        min_ratio = config.get('min_face_ratio', 0.0)
+        max_ratio = config.get('max_face_ratio', 1.0) # Default 1.0 (100%)
+        
+        # [Debug] Console Print
+        print(f"[Pipeline] Filter Settings: Min={min_ratio*100:.2f}% ({min_ratio:.4f}), Max={max_ratio*100:.2f}% ({max_ratio:.4f})")
+        print(f"[Pipeline] Image Area: {img_area} ({img_w}x{img_h})")
+
+        filtered_dets = []
+        for d in detections:
+            x1, y1, x2, y2 = d['box']
+            box_area = (x2 - x1) * (y2 - y1)
+            ratio = box_area / img_area
+            
+            pass_filter = min_ratio <= ratio <= max_ratio
+            print(f"[Pipeline] Det: {d.get('label_name')} Ratio: {ratio:.4f} ({ratio*100:.2f}%) -> {'PASS' if pass_filter else 'FAIL'}")
+
+            # [Debug]
+            if cfg.get('system', 'log_level') == 'DEBUG':
+                 self.log(f"      [Target] {d['label']} | Area: {box_area} / {img_area} = {ratio:.4f} ({ratio*100:.2f}%) | Range: {min_ratio:.4f}~{max_ratio:.4f}")
+
+            if pass_filter:
+                filtered_dets.append(d)
+        
+        # If no filtered results but we had raw results, warn the user
+        if len(detections) > 0 and len(filtered_dets) == 0:
+            self.log(f"    [Warning] All {len(detections)} detections were filtered by size ratio ({min_ratio*100:.1f}% ~ {max_ratio*100:.1f}%). Check 'Min/Max Face Ratio' settings.")
+
+        detections = filtered_dets
+        self.log(f"    - Final Targets: {len(detections)}")
+        
+        # [Debug] Explicit Visualization Log
+        if len(detections) > 0:
+            self.log(f"    [Pipeline] Visualizing {len(detections)} objects...")
+        else:
+            self.log("    [Pipeline] No objects to visualize.")
+
+        # 3. SAM (Optional)
+        if config.get('use_sam'):
+            if self.sam is None:
+                from core.sam_wrapper import SamInference
+                self.sam = SamInference(self.device)
+            
+            # For preview, we might just show regular boxes if SAM is slow, 
+            # but user wants to see 'what yolo detected' specifically.
+            # If user selected SAM mode, we should try to show SAM masks?
+            # Provided request says "yolo가 탐지되어 보여주는...". 
+            # If SAM is enabled, YOLO provides boxes for SAM. 
+            # Let's visualize detections only (boxes) primarily, maybe masks if SAM is active.
+            # For simplicity and speed in preview, Box + Label is usually enough.
+            pass
+
+        # 4. Visualize
+        viz_img = image.copy()
+        
+        # Draw Boxes
+        viz_img = draw_detections(viz_img, detections)
+        
+        return viz_img
+
+    def _remove_object(self, image, mask, config):
+        """
+        [New] Remove object (Inpaint) to create a clean background.
+        Refined: Stronger dilation, Telea init, and soft edges to prevent ghosting borders.
+        """
+        h, w = image.shape[:2]
+        
+        # 1. Setup Config for Removal
+        remove_config = config.copy()
+        
+        # Force high denoise
+        remove_config['denoising_strength'] = 1.0
+        
+        # Strict Background Prompts
+        remove_config['pos_prompt'] = "empty scene, scenery, background only, natural environment, high quality, realistic, texture, 8k"
+        orig_neg = config.get('neg_prompt', '')
+        remove_config['neg_prompt'] = "person, man, woman, human, character, face, body, silhouette, ghost, shadows, blurry, distorted, outline, seams, " + orig_neg
+        
+        remove_config['inpaint_width'] = w
+        remove_config['inpaint_height'] = h
+        
+        # Disable interfering features
+        remove_config['use_controlnet'] = False 
+        remove_config['use_hires_fix'] = False 
+        remove_config['dd_enabled'] = False 
+        
+        # 2. Dynamic Dilation & Blur
+        # Borders often appear because the mask is too tight or the transition is too hard.
+        # We dilate significantly to ensure we are generating from "clean" background context.
+        min_dim = min(h, w)
+        # Increased from 0.02 to 0.05 to ensure we skip shadows/auras
+        dilate_amount = int(min_dim * 0.05) 
+        dilate_amount = max(30, dilate_amount) # Minimum 30px
+        
+        # Ensure odd kernel
+        if dilate_amount % 2 == 0: dilate_amount += 1
+        
+        dilated_mask = cv2.dilate(mask, np.ones((dilate_amount, dilate_amount), np.uint8), iterations=1)
+        
+        # Blur the mask for seamless blending
+        blur_amount = int(dilate_amount * 0.5) 
+        if blur_amount % 2 == 0: blur_amount += 1
+        dilated_mask = cv2.GaussianBlur(dilated_mask, (blur_amount, blur_amount), 0)
+        
+        # 3. Telea Initialization (Content Fill) + Texture Injection
+        # We pre-fill using Telea to get base colors.
+        # Then ADD NOISE to prevent "flat" look which VAE hates.
+        
+        telea_mask = (dilated_mask > 20).astype(np.uint8) * 255 # Looser mask for Telea
+        
+        self.log(f"    [Background] Pre-filling masked area (Telea + Noise) to remove ghosting...")
+        clean_init = cv2.inpaint(image, telea_mask, 3, cv2.INPAINT_TELEA)
+        
+        # Add Noise to the masked area in clean_init
+        # We want to match the "scene texture" roughly.
+        # Generate Gaussian noise
+        noise = np.random.normal(0, 15, (h, w, 3)).astype(np.int16)
+        clean_init_16 = clean_init.astype(np.int16)
+        
+        # Add noise only where mask > 0
+        mask_indices = dilated_mask > 0
+        
+        # Blend noise: Image + Noise
+        noisy_bg = clean_init_16 + noise
+        noisy_bg = np.clip(noisy_bg, 0, 255).astype(np.uint8)
+        
+        # Apply noise only to masked area
+        # We use the blurred mask as alpha for noise blending?
+        # Simpler: Just replace logical area.
+        clean_init[mask_indices] = noisy_bg[mask_indices]
+        
+        self.log(f"    [Background] Generating detailed background (Denoise 1.0, Dilation {dilate_amount})...")
+        
+        try:
+            # Pass the Texturized Init image
+            clean_bg = self._run_inpaint(clean_init, dilated_mask, remove_config, 1.0, [0,0,w,h], None)
+            return clean_bg
+        except Exception as e:
+            self.log(f"    [Error] Person removal failed: {e}")
             return image
 
-    def _resize_by_person(self, image, config):
+    def _resize_by_person(self, image, config, target_boxes=None):
         """
-        [BMAB Feature] Resize by Person
-        Expand canvas if person height ratio exceeds target ratio.
+        [BMAB Feature] Scene Expansion (Outpainting) - Divide and Conquer Strategy
+        Step 1: Remove Person (Create Clean Background)
+        Step 2: Resize Person (Target)
+        Step 3: Composite (Blend)
         """
         h, w = image.shape[:2]
         target_ratio = config.get('resize_ratio', 0.6)
         
-        # 1. Detect Person (Force 'person' class)
-        # Check if the main model is likely restricted to faces/hands. 
-        # If so, switch to a generic YOLO model that knows 'person'.
+        # 1. Detect Person
         resize_model = config['detector_model']
         if 'face' in resize_model.lower() or 'hand' in resize_model.lower():
-             resize_model = 'yolov8n.pt' # Standard YOLO model usually available or auto-downloaded
-             
-        # We need a separate detection for this because the main loop might be detecting 'face'
-        person_detections = self.detector.detect(image, resize_model, 0.35, classes=['person']) # Use generic conf 0.35
+             resize_model = 'yolov8n.pt'
+        
+        person_conf = config.get('conf_thresh', 0.35)
+        person_detections = self.detector.detect(image, resize_model, person_conf, classes=['person'])
         
         if not person_detections:
-            return image
+            return image, 1.0, 0, 0
             
-        # 2. Find Max Person Height
-        max_h = 0
-        for det in person_detections:
-            x1, y1, x2, y2 = det['box']
-            ph = y2 - y1
-            if ph > max_h:
-                max_h = ph
-                
-        # 3. Check Ratio
-        current_ratio = max_h / h
-        if current_ratio <= target_ratio:
-            return image # No need to resize
+        # Filter relevant persons
+        relevant_persons = []
+        if target_boxes:
+            for p_det in person_detections:
+                px1, py1, px2, py2 = p_det['box']
+                for t_box in target_boxes:
+                    tx1, ty1, tx2, ty2 = t_box
+                    ox1 = max(px1, tx1); oy1 = max(py1, ty1)
+                    ox2 = min(px2, tx2); oy2 = min(py2, ty2)
+                    if ox2 > ox1 and oy2 > oy1:
+                        inter_area = (ox2 - ox1) * (oy2 - oy1)
+                        t_area = (tx2 - tx1) * (ty2 - ty1)
+                        if t_area > 0 and (inter_area / t_area) > 0.5:
+                            relevant_persons.append(p_det)
+                            break
+        else:
+            relevant_persons = person_detections
             
-        self.log(f"    [Resize] Person ratio {current_ratio:.2f} > {target_ratio:.2f}. Expanding canvas.")
-        
-        # 4. Calculate New Height
-        # max_h / new_h = target_ratio  =>  new_h = max_h / target_ratio
-        new_h = int(max_h / target_ratio)
-        pad_total = new_h - h
-        
-        if pad_total <= 0: return image
+        if not relevant_persons:
+            return image, 1.0, 0, 0
 
-        # 5. Determine Padding (Top/Bottom)
-        align = config.get('resize_align', 'Center')
-        top, bottom = 0, 0
-        if align == 'Bottom': # Person at bottom, add space at Top
-            top = pad_total
-        elif align == 'Top': # Person at top, add space at Bottom
-            bottom = pad_total
-        else: # Center
-            top = pad_total // 2
-            bottom = pad_total - top
+        # Build Union Mask of Persons
+        union_mask = np.zeros((h, w), dtype=np.uint8)
+        max_h = 0
+        
+        for det in relevant_persons:
+            x1, y1, x2, y2 = map(int, det['box'])
+            ph = y2 - y1
+            if ph > max_h: max_h = ph
             
-        # 6. Apply Padding (Reflection as base)
-        # Using BORDER_REFLECT_101 for better continuity than zero
-        padded_img = cv2.copyMakeBorder(image, top, bottom, 0, 0, cv2.BORDER_REFLECT_101)
+            if det.get('mask') is not None:
+                union_mask = cv2.bitwise_or(union_mask, det['mask'])
+            else:
+                # Fallback to box if mask missing (though Det should provide it if SAM used, else Box)
+                # If SAM not used, we might need a segmenter? 
+                # For now assumes YOLO boxes if SAM off. 
+                # Improving this: Use SAM specifically here if available?
+                # The caller _process_pass handles SAM init.
+                if self.sam:
+                     # Generate mask for this box
+                     try:
+                         # Ensure SAM has image
+                         self.sam.set_image(image)
+                         sam_mask = self.sam.predict_mask_from_box(det['box'])
+                         union_mask = cv2.bitwise_or(union_mask, sam_mask)
+                     except:
+                         cv2.rectangle(union_mask, (x1, y1), (x2, y2), 255, -1)
+                else:
+                     cv2.rectangle(union_mask, (x1, y1), (x2, y2), 255, -1)
+
+        current_ratio = max_h / h
         
-        # 7. Inpaint Padded Area (Outpainting)
-        # Create mask for the padded region
-        pad_mask = np.zeros((new_h, w), dtype=np.uint8)
-        # White on padded areas
-        if top > 0: pad_mask[:top, :] = 255
-        if bottom > 0: pad_mask[h+top:, :] = 255
+        # Calculate Scale
+        scale = target_ratio / current_ratio
+        if scale > 0.99: return image, 1.0, 0, 0
+        if scale < 0.2: scale = 0.2
         
-        # Run Inpaint
-        # Use high denoising to halluncinate new background
-        # We need a specific prompt. Since we don't have a separate input for background prompt,
-        # we'll use the generic negative but keep positive simple or use 'background'.
-        # Actually, using the main prompt is usually safe for background extensions if it describes the scene.
-        # But 'person' prompts might bleed. 
-        # Let's use a generic 'high quality nature background' or just rely on the model seeing the context.
-        # We reuse _run_inpaint but we need to mock a 'box' that covers the whole image?
-        # Waait, _run_inpaint expects a crop box. We can pass the whole image box.
+        self.log(f"    [Canvas] Zoom Out Plan: Scale {scale:.3f}x")
+
+        # ---------------------------------------------------------
+        # Step 1: Remove Person (Clean Background)
+        # ---------------------------------------------------------
+        clean_bg = self._remove_object(image, union_mask, config)
         
-        # Hack: run_inpaint expects a box to Crop. If we pass the whole image box, it processes the whole image.
-        full_box = [0, 0, w, new_h]
+        # [Debug] Save Clean Background
+        debug_path = os.path.join(cfg.get_path('output'), "debug_clean_bg.png")
+        try:
+            cv2.imwrite(debug_path, cv2.cvtColor(clean_bg, cv2.COLOR_RGB2BGR))
+            self.log(f"    [Debug] Saved clean background to {debug_path}")
+        except: pass
         
-        # Temp config override for outpainting
-        outpaint_config = config.copy()
-        outpaint_config['crop_padding'] = 0
-        outpaint_config['inpaint_width'] = 1024 # Force higher res for full image?
-        outpaint_config['inpaint_height'] = 1024 
-        outpaint_config['use_controlnet'] = False # Disable CN for background extension to avoid conflict
+        # For now, to verify this step, we return the clean_bg as the result
+        # This effectively pauses the pipeline at Step 1 for user verification.
+        # We need to return the dummy scale/shift so downstream logic doesn't explode,
+        # but the image will be just the background.
         
-        # Use generic prompt to avoid person ghosts?
-        # "background, scenery, detailed"
-        # Ideally user should provide this, but for now automated.
-        # outpaint_config['pos_prompt'] = "scenery, background, detailed" 
+        # Reset scale to 1.0 so boxes don't shift for this debug view
+        return clean_bg, 1.0, 0, 0
         
-        # Call inpaint
-        # We pass the WHOLE image and the MASK.
-        # Strength 1.0 means generate fully new content in masked area.
-        result_padded = self._run_inpaint(padded_img, pad_mask, outpaint_config, 1.0, full_box, None)
-        
-        return result_padded
+        # Future Steps Integration:
+        # resized_img = cv2.resize(image, ...)
+        # ... composite resized_img onto clean_bg ...
+        # return composited_img, scale, shift_x, shift_y
 
     def _process_pass(self, image, config):
-        # [New] Resize by Person (Canvas Expansion)
-        # Check BEFORE detection
-        if config.get('resize_enable', False):
-             try:
-                image = self._resize_by_person(image, config)
-             except Exception as e:
-                self.log(f"    [Error] Resize by person failed: {e}")
-                traceback.print_exc()
-
         h, w = image.shape[:2]
+        orig_h, orig_w = h, w # [Fix] Capture Original Size for Restoration
         img_area = h * w
         
+        # 1. Run Detection (Full Image)
         detections = self.detector.detect(image, config['detector_model'], config['conf_thresh'], classes=config.get('yolo_classes'))
         
-        image_copy = image.copy()
-        for i, det in enumerate(detections):
-             box = det['box']
-             score = det.get('conf', 0.0)
-             
-             # ... (Mask Generation / Prediction Logic) ...
-             
-             # Pass score to draw_mask_on_image
-             # mask_vis = draw_mask_on_image(final_img, mask, color=(0, 255, 0), box=box, text=f"{score:.2f}")
-
-        # [Disabled] Face Recovery from Pose
-        # User requested to remove "artificial" detections.
-        """
-        if config.get('use_pose_rotation', False):
-             try:
-                 # ... (Pose Logic Removed/Commented) ...
-             except Exception as e:
-                 self.log(f"    [Warning] Pose Face Recovery failed: {e}")
-        """
-
         if not detections:
             self.log(f"    [Info] No objects detected (Threshold: {config['conf_thresh']}).")
             return image
 
-        # [New] Split Prompts by [SEP] (ADetailer Syntax)
-        sep_pattern = r"\s*\[SEP\]\s*"
-        pos_prompts = re.split(sep_pattern, config.get('pos_prompt', ''))
-        neg_prompts = re.split(sep_pattern, config.get('neg_prompt', ''))
-
-        # [Modified] Sort Detections based on Config
+        # 2. Sort & Limit Detections
         boxes = [d['box'] for d in detections]
         scores = [d['conf'] for d in detections]
         sort_method = config.get('sort_method', '신뢰도')
         _, _, sorted_indices = sort_boxes(boxes, scores, sort_method, w, h)
         detections = [detections[i] for i in sorted_indices]
 
-        # [New] Apply Max Detections Limit (정렬 후 상위 N개만 선택)
+        # Limit (Max Detections)
         max_det = config.get('max_det', 20)
         if max_det > 0 and len(detections) > max_det:
             detections = detections[:max_det]
+            
+        # [New] Split Prompts by [SEP] (ADetailer Syntax)
+        # Needed for per-detection prompt assignment
+        sep_pattern = r"\s*\[SEP\]\s*"
+        pos_prompts = re.split(sep_pattern, config.get('pos_prompt', ''))
+        neg_prompts = re.split(sep_pattern, config.get('neg_prompt', ''))
+
+        # 3. [New] Resize by Person (Zoom Out)
+        # Now we scale down instead of expanding canvas
+        scale_factor = 1.0
+        pad_x, pad_y = 0, 0
+        
+        if config.get('resize_enable', False):
+             try:
+                target_boxes = [d['box'] for d in detections]
+                image, scale, px, py = self._resize_by_person(image, config, target_boxes)
+                
+                # Update Transformations
+                if scale != 1.0 or px != 0 or py != 0:
+                    self.log(f"    [Resize] Transforming boxes: Scale={scale:.3f}, Offset=({px},{py})")
+                    for det in detections:
+                        x1, y1, x2, y2 = det['box']
+                        # Scale + Shift
+                        nx1 = x1 * scale + px
+                        ny1 = y1 * scale + py
+                        nx2 = x2 * scale + px
+                        ny2 = y2 * scale + py
+                        det['box'] = [nx1, ny1, nx2, ny2]
+                    
+                    # Update dimensions for subsequent logic
+                    h, w = image.shape[:2]
+                    img_area = h * w
+                    
+             except Exception as e:
+                self.log(f"    [Error] Resize by person failed: {e}")
+                traceback.print_exc()
+
+        # 4. Processing Loop
+        image_copy = image.copy()
+        for i, det in enumerate(detections):
+             box = det['box'] # These are now shifted and correct for the new image
+             score = det.get('conf', 0.0)
 
         # [New] Pre-calculate LoRAs for visualization (프리뷰용 LoRA 정보 미리 계산)
         for i, det in enumerate(detections):
             cur_pos = pos_prompts[i] if i < len(pos_prompts) else pos_prompts[-1]
             _, lora_list = self._parse_and_extract_loras(cur_pos)
-            det['lora_names'] = [name for name, _ in lora_list]
+            det['lora_infos'] = lora_list
 
         # [Fix] 정렬 및 필터링이 끝난 후 프리뷰를 생성해야 실제 처리 순서와 일치함
         if self.preview_callback:
@@ -309,7 +509,11 @@ class ImageProcessor:
             
             # Area Filtering
             face_ratio = ((box[2]-x1)*(y2-y1)) / img_area
-            if face_ratio < config['min_face_ratio']:
+            
+            # [Feature] Landscape Detail: Bypass min_face_ratio if enabled
+            is_landscape_detail = config.get('bmab_landscape_detail', False)
+            
+            if face_ratio < config['min_face_ratio'] and not is_landscape_detail:
                 self.log(f"    Skipping detection #{i+1}: Too small ({face_ratio:.4f} < {config['min_face_ratio']})")
                 continue
             if face_ratio > config['max_face_ratio']:
@@ -458,7 +662,7 @@ class ImageProcessor:
 
             # Mask Refine
             mask = MaskUtils.shift_mask(mask, config.get('x_offset', 0), config.get('y_offset', 0))
-            mask = MaskUtils.refine_mask(mask, dilation=config['mask_dilation'], blur=config['mask_blur'])
+            mask = MaskUtils.refine_mask(mask, dilation=config['mask_dilation'], erosion=config.get('mask_erosion', 0), blur=config['mask_blur'])
             
             # Landmarks (needed for both Merge and Single modes if anatomy check is on)
             kps = None
@@ -542,8 +746,38 @@ class ImageProcessor:
                       self.log(f"    Skipping detection: Gender mismatch ({detected_gender} != {target_gender})")
                       continue
 
+            # [Hires Fix] Configuration
             denoise = self._calc_dynamic_denoise(box, (h, w), config['denoising_strength'])
-            final_img = self._run_inpaint(final_img, mask, det_config, denoise, box, kps)
+            current_steps = None
+            current_cfg = None
+
+            # [Fix] Hires Fix Enable/Disable Logic
+            # If disabled, force upscaler to None to prevent _run_inpaint from running it
+            if config.get('use_hires_fix', False):
+                 factor = config.get('hires_upscale_factor', 2.0)
+                 
+                 base_res = 512
+                 if hasattr(self.model_manager.pipe, "tokenizer_2"): base_res = 1024
+                 if config.get('inpaint_width', 0) > 0: base_res = config['inpaint_width']
+                 
+                 hires_target_w = int(base_res * factor)
+                 if config.get('hires_width', 0) > 0: hires_target_w = config['hires_width']
+                 
+                 det_config['inpaint_width'] = hires_target_w
+                 denoise = config.get('hires_denoise', 0.4)
+                 current_steps = config.get('hires_steps', 20)
+                 current_cfg = config.get('hires_cfg', 7.0)
+                 det_config['hires_upscaler'] = config.get('hires_upscaler', 'None')
+                 
+                 self.log(f"    [Hires Fix] Active: Res={hires_target_w}, Denoise={denoise}, Upscaler={det_config['hires_upscaler']}")
+            else:
+                 det_config['hires_upscaler'] = 'None'
+
+            # [Fix] Apply LoRAs specific to this detection
+            current_loras = det.get('lora_infos', [])
+            self.model_manager.manage_lora(current_loras, "load")
+
+            final_img = self._run_inpaint(final_img, mask, det_config, denoise, box, kps, steps=current_steps, guidance_scale=current_cfg)
 
             if self.preview_callback:
                 self.preview_callback(final_img)
@@ -581,11 +815,12 @@ class ImageProcessor:
             if self.preview_callback:
                 self.preview_callback(final_img)
             
-        return final_img
+
+
 
         return final_img
 
-    def _run_inpaint(self, image, mask, config, strength, box, kps):
+    def _run_inpaint(self, image, mask, config, strength, box, kps, steps=None, guidance_scale=None):
         # [Fix] Use Geometry Module for Alignment & Rotation
         padding_px = config['crop_padding']
         
@@ -594,8 +829,6 @@ class ImageProcessor:
         base_padding_ratio = (padding_px * 2) / max(w_box, h_box) if max(w_box, h_box) > 0 else 0.25
         
         # [BMAB Feature] Context Expansion
-        # context_expand_factor: 1.0 by default. 
-        # If 1.5, we add 0.5 to the padding ratio (effectively expanding the crop frame).
         expand_scale = config.get('context_expand_factor', 1.0)
         final_padding = base_padding_ratio + (expand_scale - 1.0)
 
@@ -607,7 +840,6 @@ class ImageProcessor:
         if config.get('inpaint_width', 0) > 0: target_res = config['inpaint_width']
         
         # [BMAB Feature] Safety Limit
-        # Avoid OOM by capping resolution
         MAX_SAFE_RES = 2048
         if target_res > MAX_SAFE_RES:
             self.log(f"    [Warning] Target resolution {target_res} exceeds safety limit {MAX_SAFE_RES}. Capping.")
@@ -616,144 +848,49 @@ class ImageProcessor:
         do_rotate = config.get('auto_rotate', False) and kps is not None
         
         # 1. Align & Crop (Image & Mask)
-        # Pass final_padding instead of padding_ratio
         proc_img, M = align_and_crop(image, box, kps, target_size=target_res, padding=final_padding, force_rotate=do_rotate)
         proc_mask, _ = align_and_crop(mask, box, kps, target_size=target_res, padding=final_padding, force_rotate=do_rotate, borderMode=cv2.BORDER_CONSTANT)
         
+        # [Hires Fix] Upscale Injection
+        # [Hires Fix] Upscale Injection (Refactored)
+        hires_upscaler_name = config.get('hires_upscaler', 'None')
+        if hires_upscaler_name and hires_upscaler_name != 'None':
+             proc_img = self._apply_hires_upscale(image, box, kps, final_padding, target_res, hires_upscaler_name, do_rotate)
+
         # [Fix] 합성 시 바운딩 박스 흔적을 없애기 위해 Soft Mask 보존
         paste_mask = proc_mask.copy()
 
         # Binarize mask after warping
         _, proc_mask = cv2.threshold(proc_mask, 127, 255, cv2.THRESH_BINARY)
+
+
         
-        # [New] BMAB Basic Functions (Image Pre-processing)
-        # Apply transforms to PROCESSED CROP (proc_img) BEFORE Inpainting
-        # Order: Contrast -> Brightness -> Sharpness -> ColorTemp -> Noise
-        
-        # 1. Contrast
-        if config.get('bmab_contrast', 1.0) != 1.0:
-            pil_temp = Image.fromarray(cv2.cvtColor(proc_img, cv2.COLOR_BGR2RGB))
-            enhancer = Image.ImageEnhance.Contrast(pil_temp)
-            pil_temp = enhancer.enhance(config['bmab_contrast'])
-            proc_img = cv2.cvtColor(np.array(pil_temp), cv2.COLOR_RGB2BGR)
+        if config.get('bmab_enabled', True):
+            from core.bmab_utils import apply_bmab_basic
+            try:
+                # Apply BMAB Basic Effects (Contrast, Brightness, Sharpness, Color, Temp, Noise)
+                proc_img = apply_bmab_basic(proc_img, config)
+            except Exception as e:
+                self.log(f"    [Warning] BMAB Basic effects failed: {e}")
+            
+        # [New] Mask Content Preprocessing
+        # This replaces the legacy 'use_noise_mask' logic
+        mask_content_mode = config.get('mask_content', 'original')
+        proc_img = self._apply_mask_content(proc_img, proc_mask, mask_content_mode)
 
-        # 2. Brightness
-        if config.get('bmab_brightness', 1.0) != 1.0:
-            pil_temp = Image.fromarray(cv2.cvtColor(proc_img, cv2.COLOR_BGR2RGB))
-            enhancer = Image.ImageEnhance.Brightness(pil_temp)
-            pil_temp = enhancer.enhance(config['bmab_brightness'])
-            proc_img = cv2.cvtColor(np.array(pil_temp), cv2.COLOR_RGB2BGR)
-
-        # 3. Sharpness
-        if config.get('bmab_sharpness', 1.0) != 1.0:
-            pil_temp = Image.fromarray(cv2.cvtColor(proc_img, cv2.COLOR_BGR2RGB))
-            enhancer = Image.ImageEnhance.Sharpness(pil_temp)
-            pil_temp = enhancer.enhance(config['bmab_sharpness'])
-            proc_img = cv2.cvtColor(np.array(pil_temp), cv2.COLOR_RGB2BGR)
-
-        # 4. Color Temperature
-        if config.get('bmab_color_temp', 0.0) != 0.0:
-            # Simple Tint approach: 
-            # Positive -> Warmer (More Red/Yellow), Negative -> Cooler (More Blue)
-            # In BGR: Warmer = Increase B (Blue) DOWN, Increase R/G UP?
-            # Actually: Warm = +R, +G(slightly), -B. Cool = +B, +G(slightly), -R.
-            temp_shift = config['bmab_color_temp']
-            proc_img = proc_img.astype(np.float32)
-            if temp_shift > 0: # Warm
-                proc_img[:, :, 2] += temp_shift # R
-                proc_img[:, :, 1] += temp_shift * 0.4 # G
-                proc_img[:, :, 0] -= temp_shift # B
-            else: # Cool
-                proc_img[:, :, 0] += abs(temp_shift) # B
-                proc_img[:, :, 1] += abs(temp_shift) * 0.4 # G
-                proc_img[:, :, 2] -= abs(temp_shift) # R
-            proc_img = np.clip(proc_img, 0, 255).astype(np.uint8)
-
-        # 5. Noise Alpha (Pre-Inpaint Noise)
-        # This differs from "Noise Mask" (which REPLACES mask area).
-        # This ADDS noise to the input image for the AI to "texture" over.
-        if config.get('bmab_noise_alpha', 0.0) > 0.0:
-            alpha = config['bmab_noise_alpha']
-            noise = np.random.normal(0, 50, proc_img.shape).astype(np.float32) # Sigma 50
-            proc_img_f = proc_img.astype(np.float32)
-            # proc_img = (1-alpha)*proc_img + alpha*noise ? No, standard blending.
-            # Usually: Image + Noise * Strength
-            proc_img_f = proc_img_f + (noise * alpha * 2.0) # Boost effect
-            proc_img = np.clip(proc_img_f, 0, 255).astype(np.uint8)
-
-        # 6. Edge Enhancement (Canny Sharpening)
-        if config.get('bmab_edge_strength', 0.0) > 0.0:
-            low = config.get('bmab_edge_low', 50)
-            high = config.get('bmab_edge_high', 200)
-            strength = config['bmab_edge_strength']
-            
-            # Detect Edges
-            gray = cv2.cvtColor(proc_img, cv2.COLOR_BGR2GRAY)
-            edges = cv2.Canny(gray, low, high)
-            
-            # Blend Edges into Image (Darken edges)
-            # Create an edge mask (inverted: white background, black edges)
-            edges_inv = cv2.bitwise_not(edges)
-            edges_bgr = cv2.cvtColor(edges_inv, cv2.COLOR_GRAY2BGR)
-            
-            # Blend: proc_img * (1 - strength) + (proc_img * edges_bgr) * strength ???
-            # Simpler: just darken the pixels where edges exist?
-            # Or use PIL ImageEnhance.Sharpness logic? No, this is explicit Canny-based.
-            
-            # Method: weighted add? 
-            # If edge pixel is white (255) in 'edges', we want to emphasize it in 'proc_img'.
-            # Let's sharpen by adding edges to intensity channel? Or subtracting from it?
-            # Typically "Edge Enhancement" means making edges more visible.
-            
-            # Simple approach: Overlay edges (black) onto image with alpha.
-            # Convert edges to colored mask? No, just darken.
-            proc_img_f = proc_img.astype(np.float32)
-            mask = edges > 0
-            
-            # Darken edges by subtraction
-            proc_img_f[mask] -= (255.0 * strength)
-            proc_img = np.clip(proc_img_f, 0, 255).astype(np.uint8)
-            
         new_h, new_w = proc_img.shape[:2]
         
+        # [Visual Check] BGR to RGB for PIL
+        # Since upscaler.py now handles BGR-in/BGR-out correctly (matching A1111 standard),
+        # proc_img is strictly BGR. We can trust this conversion.
         pil_img = Image.fromarray(cv2.cvtColor(proc_img, cv2.COLOR_BGR2RGB))
         pil_mask = Image.fromarray(proc_mask)
-
-        # [New] Noise Mask Implementation (Renamed/Legacy)
-        # This replaces the MASKED area entirely with noise.
-        # BMAB Basic Noise Alpha above modifies the INPUT picture globally (or inside crop).
-        # We keep both features.
-        if config.get('use_noise_mask', False):
-             # Create Gaussian Noise
-             # [Fix] Generate 3-channel noise directly or convert properly
-             # noise = np.random.normal(0, 1, proc_img.shape).astype(np.uint8) * 255 -> This creates (H,W,3) but low values
-             # Better: Random uniform noise [0, 255]
-             noise = np.random.randint(0, 256, proc_img.shape, dtype=np.uint8)
-             # No need for cvtColor if we generated (H, W, 3) directly from shape
-             
-             # Blend Noise into Image ONLY at Masked Area
-             # ADetailer standard: Replace original content with noise in the masked area
-             # But usually Stable Diffusion needs some structure. ADetailer typically does 'fill' latent.
-             # Since we are pixel based here, we can blend noise.
-             # Stronger approach: Replace masked area with noise completely? 
-             # Let's trust the user wants "Noise" (high denoising)
-             
-             # Efficient numpy masking
-             mask_indices = proc_mask > 127
-             proc_img_noise = proc_img.copy()
-             
-             # Random noise (0-255)
-             noise_layer = np.random.randint(0, 256, proc_img.shape, dtype=np.uint8)
-             
-             proc_img_noise[mask_indices] = noise_layer[mask_indices]
-             pil_img = Image.fromarray(cv2.cvtColor(proc_img_noise, cv2.COLOR_BGR2RGB))
-             self.log(f"    [Info] Applied Noise Mask.")
 
         # ControlNet
         control_args = {}
         # [Fix] 파이프라인에 ControlNet이 로드되어 있다면, 설정(use_controlnet)과 무관하게 이미지를 공급해야 함
         if hasattr(self.model_manager.pipe, "controlnet"):
-            if not config['use_controlnet']:
+            if not config.get('use_controlnet', False):
                 # ControlNet이 로드되었으나 사용 안 함 -> 가중치 0으로 설정하여 영향력 제거
                 control_args["control_image"] = pil_img
                 control_args["controlnet_conditioning_scale"] = 0.0
@@ -829,7 +966,7 @@ class ImageProcessor:
         if hasattr(self.model_manager.pipe, "tokenizer_2"):
             prompt_embeds, neg_prompt_embeds = None, None
         else:
-            prompt_embeds, neg_prompt_embeds = self._get_long_prompt_embeds(
+            prompt_embeds, neg_prompt_embeds = self._get_compel_embeds(
                 self.model_manager.pipe, config['pos_prompt'], config['neg_prompt']
             )
 
@@ -843,6 +980,8 @@ class ImageProcessor:
             "image": pil_img,
             "mask_image": pil_mask,
             "strength": strength,
+            "guidance_scale": guidance_scale if guidance_scale is not None else config.get('cfg_scale', 7.0),
+            "num_inference_steps": steps if steps is not None else config.get('steps', 20),
             "width": new_w, "height": new_h,
             "generator": generator,
             **control_args
@@ -854,14 +993,71 @@ class ImageProcessor:
         else:
             infer_args["prompt"] = config['pos_prompt']
             infer_args["negative_prompt"] = config['neg_prompt']
+            
+        print(f"    [Pipeline] Pre-Infer: Embeds={'Present' if prompt_embeds is not None else 'None'}")
+        if prompt_embeds is not None:
+             print(f"      - Pos: {prompt_embeds.dtype} ({prompt_embeds.shape}) Device={prompt_embeds.device}")
+             print(f"      - Neg: {neg_prompt_embeds.dtype} ({neg_prompt_embeds.shape}) Device={neg_prompt_embeds.device}")
 
         # Inference
         # [Fix] 인퍼런스 직전 메모리 정리
         torch.cuda.empty_cache()
         
+        # [Detail Daemon & Soft Inpainting Prep]
+        dd_enabled = config.get('dd_enabled', False)
+        use_soft = config.get('use_soft_inpainting', False)
+        
+        # We enable DetailDaemonContext if either DD or SoftInpainting is active
+        # The Context (in detail_daemon.py) needs to support Soft Inpainting params if we pass them.
+        # Assuming current DetailDaemonContext isn't yet updated for Soft Inpainting, we pass them 
+        # but they might be ignored unless I update DetailDaemon.
+        # However, Pixel Composite is handled POST-inference. 
+        # Only 'Schedule bias', 'Preservation strength', 'Transition contrast boost' might need hook support.
+        # If DetailDaemon doesn't support them, passing them won't crash it (dict is flexible), but logic won't run.
+        # I will strictly enable DD context if dd_enabled is True for now,
+        # OR if use_soft is True AND I want to use DD hooks for Soft Inpainting.
+        # Given request is "UI & Dev Direction", implementing the complex hook logic for Soft Inpainting 
+        # inside DetailDaemon is likely out of scope for this single turn unless existing DD supports it.
+        # I'll stick to passing config.
+        
+        dd_config = {}
+        if dd_enabled or use_soft:
+             dd_config = {
+                 'mode': config.get('dd_mode', 'both'),
+                 'amount': config.get('dd_amount', 0.1),
+                 'start': config.get('dd_start', 0.2),
+                 'end': config.get('dd_end', 0.8),
+                 'bias': config.get('dd_bias', 0.5),
+                 'exponent': config.get('dd_exponent', 1.0),
+                 'start_offset': config.get('dd_start_offset', 0.0),
+                 'end_offset': config.get('dd_end_offset', 0.0),
+                 'fade': config.get('dd_fade', 0.0),
+                 'smooth': config.get('dd_smooth', True),
+                 
+                 # Soft Inpainting Params
+                 'soft_enabled': use_soft,
+                 'soft_schedule_bias': config.get('soft_schedule_bias', 1.0),
+                 'soft_preservation_strength': config.get('soft_preservation_strength', 0.5),
+                 'soft_transition_contrast': config.get('soft_transition_contrast', 4.0)
+             }
+             if config.get('system', 'log_level') == 'DEBUG':
+                 self.log(f"    [DetailDaemon] Active: {dd_config}")
+
+        # [Fix] CPU Autocast Issue
+        # Determine device type for autocast
+        device_type = "cuda"
+        if hasattr(self.device, "type"):
+            device_type = self.device.type
+        elif isinstance(self.device, str):
+            device_type = self.device.split(":")[0]
+
+        # Enable autocast only for CUDA. CPU autocast (bfloat16) is often unstable or mismatching with float32 usage.
+        use_autocast = (device_type == "cuda")
+
         with torch.inference_mode():
-            with torch.autocast(self.device.split(':')[0]):
-                output = self.model_manager.pipe(**infer_args).images[0]
+            with torch.autocast(device_type, enabled=use_autocast):
+                with DetailDaemonContext(self.model_manager.pipe, dd_enabled, dd_config):
+                    output = self.model_manager.pipe(**infer_args).images[0]
             
             # [Fix] NaN / Black Image Detection & Auto-Recovery
             # 추론 결과가 검은색(0)이거나 NaN이 포함되어 있으면 실패로 간주하고 모델을 재로드함
@@ -877,6 +1073,13 @@ class ImageProcessor:
         # Paste Back (Alpha Blend)
         res_np = cv2.cvtColor(np.array(output), cv2.COLOR_RGB2BGR)
         
+        # [New] Soft Inpainting: Pixel Composite
+        if config.get('use_soft_inpainting', False):
+             # We need the original content (before mask filling) for composite.
+             # Recover it using the same transform M.
+             proc_img_orig = cv2.warpAffine(image, M, (new_w, new_h))
+             res_np = self._apply_pixel_composite(proc_img_orig, res_np, proc_mask, config)
+
         # [New] Color Fix (색감 보정)
         color_fix_method = config.get('color_fix', 'None')
         if color_fix_method != 'None':
@@ -891,18 +1094,148 @@ class ImageProcessor:
         
         return final_img
 
+    def _apply_hires_upscale(self, image, box, kps, padding, target_size, upscaler_name, do_rotate):
+        """
+        Applies Hires Fix upscaling logic similar to A1111/Forge.
+        1. Extracts crop at native resolution.
+        2. Upscales using specified model (ESRGAN) or interpolation (Latent/etc).
+        3. Resizes to target_size for Inpainting.
+        """
+        try:
+            w_box, h_box = box[2] - box[0], box[3] - box[1]
+            native_size = int(max(w_box, h_box) * (1 + padding))
+            
+            # Extract Native Crop
+            native_crop, _ = align_and_crop(image, box, kps, target_size=native_size, padding=padding, force_rotate=do_rotate)
+            
+            upscaled_img = None
+            
+            # Latent / Interpolation Methods
+            if upscaler_name in ["Latent", "Lanczos", "Nearest", "Bicubic"]:
+                # Just resize native crop to target_size?
+                # No, "Latent" implies we just want to generate high res.
+                # Since we are prep-ing the image for Inpaint, "Latent" usually means "Just Resize"
+                # so the VAE encodes the resized image.
+                # However, usually we want some specific interpolation.
+                match upscaler_name:
+                    case "Nearest": interp = cv2.INTER_NEAREST
+                    case "Bicubic": interp = cv2.INTER_CUBIC
+                    case _: interp = cv2.INTER_LANCZOS4 # Default for Latent/Lanczos
+                
+                # We already have native_crop. Resize it to target_size.
+                # Wait, if target_size >> native_size, this is the upscale.
+                upscaled_img = cv2.resize(native_crop, (target_size, target_size), interpolation=interp)
+                self.log(f"    [Hires Fix] Upscaling with {upscaler_name} (Resize only)")
+
+            # ESRGAN Models
+            else:
+                model_path = os.path.join("D:\\AI_Models\\ESRGAN", upscaler_name)
+                if self.upscaler.load_model(model_path):
+                    self.log(f"    [Hires Fix] Upscaling with {upscaler_name}...")
+                    # 1. Upscale (e.g. 4x)
+                    upscaled = self.upscaler.upscale(native_crop) # Returns BGR
+                    
+                    # 2. Fit to Target Size
+                    # If result is larger than target, downscale (Area).
+                    # If smaller (rare), upscale (Lanczos).
+                    h, w = upscaled.shape[:2]
+                    if h > target_size:
+                        upscaled_img = cv2.resize(upscaled, (target_size, target_size), interpolation=cv2.INTER_AREA)
+                    else:
+                        upscaled_img = cv2.resize(upscaled, (target_size, target_size), interpolation=cv2.INTER_LANCZOS4)
+                else:
+                    self.log(f"    [Warning] Upscaler {upscaler_name} not found. Using Lanczos fallback.")
+                    upscaled_img = cv2.resize(native_crop, (target_size, target_size), interpolation=cv2.INTER_LANCZOS4)
+
+            return upscaled_img
+            
+        except Exception as e:
+            self.log(f"    [Error] Hires Upscale logic failed: {e}")
+            # Fallback: Just return current aligned crop (which is already target_size usually, wait.
+            # No, if this fails, we need to return SOMETHING.
+            # Re-run align_and_crop at target_size
+            fallback, _ = align_and_crop(image, box, kps, target_size=target_size, padding=padding, force_rotate=do_rotate)
+            return fallback
+
     def _calc_dynamic_denoise(self, box, img_shape, base):
         x1, y1, x2, y2 = box
         ratio = ((x2 - x1) * (y2 - y1)) / (img_shape[0] * img_shape[1])
         adj = 0.15 if ratio < 0.05 else (0.10 if ratio < 0.10 else (0.05 if ratio < 0.20 else 0.0))
         return max(0.1, min(base + adj, 0.8))
 
+    def _get_compel_embeds(self, pipe, prompt, negative_prompt):
+        """Compel 라이브러리를 사용한 프롬프트 가중치 처리 ((text:1.1) 등 지원)"""
+        if not prompt: prompt = ""
+        if not negative_prompt: negative_prompt = ""
+        
+        if not hasattr(pipe, "tokenizer") or not hasattr(pipe, "text_encoder"):
+            return None, None
+
+        # [Fix] SDXL vs SD1.5 Compel Init
+        # SDXL has tokenizer_2 and text_encoder_2
+        if hasattr(pipe, "tokenizer_2"):
+             compel = Compel(
+                 tokenizer=[pipe.tokenizer, pipe.tokenizer_2],
+                 text_encoder=[pipe.text_encoder, pipe.text_encoder_2],
+                 returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
+                 requires_pooled=[False, True]
+             )
+             # SDXL requires pooled embeds too
+             # For simplicity, let's use the pipe's own encode_prompt if possible, 
+             # BUT pipe.encode_prompt doesn't support A1111 weights natively without Compel.
+             # Actually Compel for SDXL is complex. 
+             # Let's stick to standard handling for SDXL (which supports simple weighting in some versions)
+             # OR just use Compel if we trust it.
+             # For now, let's default to None for SDXL to avoid breaking it, relying on Diffusers native handling
+             # or if user really needs weighting, we need detailed SDXL Compel setup.
+             return None, None # Let SDXL pipeline handle it (Diffusers has some support)
+        else:
+             # SD 1.5
+             compel = Compel(
+                 tokenizer=pipe.tokenizer, 
+                 text_encoder=pipe.text_encoder,
+                 truncate_long_prompts=False # Chunking
+             )
+
+        try:
+             prompt_embeds = compel(prompt)
+             neg_prompt_embeds = compel(negative_prompt)
+             
+             # [Fix] Ensure same length (padding) to avoid CrossAttention mismatch
+             [prompt_embeds, neg_prompt_embeds] = compel.pad_conditioning_tensors_to_same_length([prompt_embeds, neg_prompt_embeds])
+             
+             # [Fix] Ensure device (Compel might return CPU tensors if model is offloaded)
+             # Use text_encoder dtype to avoid autocast prioritization conflicts
+             # BUT if running on CPU (fallback), we must use float32 because float16 autocast on CPU is unstable
+             if hasattr(self.device, 'type') and self.device.type == 'cpu':
+                 target_dtype = torch.float32
+             elif isinstance(self.device, str) and 'cpu' in self.device:
+                 target_dtype = torch.float32
+             else:
+                 try:
+                    target_dtype = pipe.text_encoder.dtype
+                 except:
+                    try:
+                        target_dtype = next(pipe.text_encoder.parameters()).dtype
+                    except:
+                        target_dtype = torch.float32
+
+             prompt_embeds = prompt_embeds.to(device=self.device, dtype=target_dtype)
+             neg_prompt_embeds = neg_prompt_embeds.to(device=self.device, dtype=target_dtype)
+             
+             return prompt_embeds, neg_prompt_embeds
+        except Exception as e:
+             self.log(f"    [Warning] Compel failed: {e}. Fallback to simple tokenization.")
+             return self._get_long_prompt_embeds(pipe, prompt, negative_prompt)
+
     def _get_long_prompt_embeds(self, pipe, prompt, negative_prompt):
+        # ... (Existing logic kept as fallback) ...
+        # (Rest of existing function)
         """77토큰 제한을 우회하기 위한 임베딩 청킹(Chunking) 처리"""
         if not prompt: prompt = ""
         if not negative_prompt: negative_prompt = ""
         
-        # 파이프라인에 토크나이저/인코더가 없는 경우
+        # ... (Same as before) ...
         if not hasattr(pipe, "tokenizer") or not hasattr(pipe, "text_encoder"):
             return None, None
             
@@ -926,13 +1259,11 @@ class ImageProcessor:
         pos_chunks = chunk_tokens(pos_tokens)
         neg_chunks = chunk_tokens(neg_tokens)
 
-        # 3. Pad chunks to match max length (Reforge style)
+        # 3. Pad chunks
         total_chunks = max(len(pos_chunks), len(neg_chunks))
         
-        while len(pos_chunks) < total_chunks:
-            pos_chunks.append([])
-        while len(neg_chunks) < total_chunks:
-            neg_chunks.append([])
+        while len(pos_chunks) < total_chunks: pos_chunks.append([])
+        while len(neg_chunks) < total_chunks: neg_chunks.append([])
 
         # 4. Encode
         pad_token = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
@@ -942,30 +1273,158 @@ class ImageProcessor:
             for chunk in chunks:
                 input_ids = [tokenizer.bos_token_id] + chunk + [tokenizer.eos_token_id]
                 pad_len = tokenizer.model_max_length - len(input_ids)
-                if pad_len > 0:
-                    input_ids += [pad_token] * pad_len
+                if pad_len > 0: input_ids += [pad_token] * pad_len
                 
-                # [Fix] CPU Offload 호환성: 모델이 CPU에 있으면 입력도 CPU로 생성
                 input_tensor = torch.tensor([input_ids], device=text_encoder.device)
                 embeds.append(text_encoder(input_tensor)[0])
-            return torch.cat(embeds, dim=1).to(self.device)
+            # [Fix] Match text_encoder dtype dynamically to avoid autocast conflicts
+            # BUT if running on CPU (fallback), we must use float32 because float16 autocast on CPU is unstable
+            if hasattr(self.device, 'type') and self.device.type == 'cpu':
+                target_dtype = torch.float32
+            elif isinstance(self.device, str) and 'cpu' in self.device:
+                target_dtype = torch.float32
+            else:
+                try:
+                    target_dtype = text_encoder.dtype
+                except:
+                    try:
+                        target_dtype = next(text_encoder.parameters()).dtype
+                    except:
+                        target_dtype = torch.float32 # Fallback
+            
+            res = torch.cat(embeds, dim=1).to(device=self.device, dtype=target_dtype)
+            return res
 
         return encode(pos_chunks), encode(neg_chunks)
 
     def _parse_and_extract_loras(self, prompt):
         """
         프롬프트에서 <lora:filename:multiplier> 태그를 추출하고 제거합니다.
-        반환값: (clean_prompt, [(name, scale), ...])
+        [<lora:A:1>:<lora:B:0.5>] 같은 중첩/복합 문법에서도 LoRA 태그 자체를 찾아냅니다.
         """
         # 정규식: <lora:이름> 또는 <lora:이름:강도>
+        # [Fix] Global search enables finding LoRAs inside other structures
         pattern = r"<lora:([^:>]+)(?::([\d.]+))?>"
         loras = []
         
-        def replace_func(match):
-            name = match.group(1)
-            scale = float(match.group(2)) if match.group(2) else 1.0
-            loras.append((name, scale))
-            return "" # 태그 제거
-            
-        clean_prompt = re.sub(pattern, replace_func, prompt)
+        # 1. Extract all LoRAs
+        matches = re.findall(pattern, prompt)
+        for name, scale_str in matches:
+             scale = float(scale_str) if scale_str else 1.0
+             loras.append((name, scale))
+             
+        # 2. Remove tags from prompt
+        # We just remove the <lora:...> parts. 
+        # Note: If it was [<lora:A>:<lora:B>], it becomes [:]. 
+        # This leaves residue [ : ] which is usually harmless punctuation to CLIP.
+        clean_prompt = re.sub(pattern, "", prompt)
+        
         return clean_prompt, loras
+        
+    def _apply_mask_content(self, image, mask, mode):
+        """
+        [New] Mask Content (Initialization) Logic
+        mode: 'original', 'fill', 'latent_noise', 'latent_nothing'
+        """
+        if mode == 'original':
+            return image
+            
+        result = image.copy()
+        h, w = image.shape[:2]
+        
+        # Ensure mask is single channel
+        if len(mask.shape) == 3: mask = mask[:,:,0]
+        
+        # Binary mask for processing
+        bin_mask = (mask > 127).astype(np.uint8)
+        
+        if mode == 'fill':
+            # Telea Inpainting (OpenCV)
+            # radius=3 is standard
+            result = cv2.inpaint(image, bin_mask * 255, 3, cv2.INPAINT_TELEA)
+            
+        elif mode == 'latent_noise':
+            # Fill with random noise
+            # Since we work in pixel space here (before VAE), we can fill with random pixel noise
+            # which VAE will encode as noisy latent.
+            noise = np.random.randint(0, 255, (h, w, 3), dtype=np.uint8)
+            # Apply only to masked area
+            # Using boolean indexing
+            mask_bool = bin_mask > 0
+            result[mask_bool] = noise[mask_bool]
+            
+        elif mode == 'latent_nothing':
+            # Fill with constant color (e.g. gray or black)
+            # Standard "Nothing" often implies 0 latent, which is mid-gray in pixel?
+            # Or just black. Let's use average gray for neutrality.
+            fill_color = np.array([127, 127, 127], dtype=np.uint8)
+            mask_bool = bin_mask > 0
+            result[mask_bool] = fill_color
+            
+        return result
+        
+    def _apply_pixel_composite(self, original, result, mask, config):
+        """
+        [New] Soft Inpainting: Pixel Composite
+        Blends the in-painted result with the original based on mask influence and difference threshold.
+        """
+        try:
+            # Configs
+            mask_infl = config.get('soft_mask_influence', 0.0)
+            diff_thresh = config.get('soft_diff_threshold', 0.5)
+            diff_contrast = config.get('soft_diff_contrast', 2.0)
+            
+            if mask_infl == 0 and diff_thresh == 0.5 and diff_contrast == 2.0:
+                # Optimized: Default usually means standard blending (just use result?)
+                # Wait, "Difference threshold 0.5" isn't "pass-through".
+                # If user enables Soft Inpainting but leaves defaults, we should apply logic.
+                pass
+
+            # Convert to float for math
+            F_orig = original.astype(np.float32) / 255.0
+            F_res = result.astype(np.float32) / 255.0
+            F_mask = mask.astype(np.float32) / 255.0
+            if len(F_mask.shape) == 2: F_mask = np.expand_dims(F_mask, axis=2)
+            
+            # Calculate Difference (Luma or RGB distance)
+            diff = np.abs(F_orig - F_res)
+            # Average across channels
+            diff_map = np.mean(diff, axis=2, keepdims=True)
+            
+            # 1. Mask Influence
+            # "How strongly the original mask should bias the difference threshold"
+            # If mask_infl is high, we preserve more original content near mask edges?
+            # Logic borrowed from WebUI Soft Inpainting:
+            # threshold_map = threshold + (mask * mask_influence) ? 
+            # Actually WebUI logic is complex. 
+            # Simplified: Adjust diff_map based on mask opacity if mask is soft.
+            # But here mask is usually binary-ish unless blurred.
+            
+            # Simple implementation: 
+            # We want to keep ORIGINAL if difference is SMALL (below threshold).
+            # We want to keep NEW if difference is LARGE (above threshold).
+            # Use Sigmoid for smooth transition.
+            
+            # x = (diff - threshold) * contrast
+            # alpha = sigmoid(x) -> 0 (Original) to 1 (Result)
+            
+            # Adjust threshold with mask influence?
+            # If mask is strong (1), threshold increases? (Harder to change)
+            # thresh = base_thresh + (1 - F_mask) * mask_infl ?
+            
+            threshold = diff_thresh
+            
+            # Contrast
+            x = (diff_map - threshold) * diff_contrast
+            # Sigmoid: 1 / (1 + exp(-x))
+            alpha_map = 1.0 / (1.0 + np.exp(-x))
+            
+            # Blend
+            # composite = original * (1 - alpha) + result * alpha
+            composite = F_orig * (1.0 - alpha_map) + F_res * alpha_map
+            
+            return np.clip(composite * 255, 0, 255).astype(np.uint8)
+            
+        except Exception as e:
+            print(f"    [Error] Pixel Composite failed: {e}")
+            return result

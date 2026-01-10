@@ -228,6 +228,7 @@ class ComparisonViewer(QWidget):
 # =========================================================
 class FileQueueWidget(QWidget):
     file_clicked = pyqtSignal(str)
+    file_rotated = pyqtSignal(str, int) # path, angle
 
     def __init__(self):
         super().__init__()
@@ -236,6 +237,27 @@ class FileQueueWidget(QWidget):
         layout.setSpacing(5)
         
         toolbar = QHBoxLayout()
+        
+        # [New] Rotation Controls
+        self.btn_rot_ccw = QPushButton("↺")
+        self.btn_rot_reset = QPushButton("Reset")
+        self.btn_rot_cw = QPushButton("↻")
+        
+        # Style for rotation buttons
+        for btn in [self.btn_rot_ccw, self.btn_rot_reset, self.btn_rot_cw]:
+             btn.setFixedWidth(50)
+             
+        self.btn_rot_ccw.setToolTip("왼쪽으로 90도 회전 (Counter-Clockwise)")
+        self.btn_rot_cw.setToolTip("오른쪽으로 90도 회전 (Clockwise)")
+        self.btn_rot_reset.setToolTip("회전 초기화 (Reset Rotation)")
+
+        toolbar.addWidget(self.btn_rot_ccw)
+        toolbar.addWidget(self.btn_rot_reset)
+        toolbar.addWidget(self.btn_rot_cw)
+        
+        # Separator (Space)
+        toolbar.addSpacing(10)
+
         self.btn_add = QPushButton("파일 추가")
         self.btn_del_sel = QPushButton("선택 삭제")
         self.btn_del_all = QPushButton("전체 삭제")
@@ -263,7 +285,56 @@ class FileQueueWidget(QWidget):
         self.btn_del_all.clicked.connect(self.list_widget.clear)
         self.btn_del_sel.clicked.connect(self._delete_selected)
         
+        # Connect Rotation
+        self.btn_rot_ccw.clicked.connect(lambda: self._rotate_selection(-90))
+        self.btn_rot_cw.clicked.connect(lambda: self._rotate_selection(90))
+        self.btn_rot_reset.clicked.connect(self._reset_rotation)
+        
         self.set_theme("dark")
+
+    def _rotate_selection(self, angle_delta):
+        items = self.list_widget.selectedItems()
+        if not items: return
+        
+        for item in items:
+            current_angle = item.data(Qt.ItemDataRole.UserRole + 1) or 0
+            new_angle = (current_angle + angle_delta) % 360
+            self._update_item_rotation(item, new_angle)
+            
+            # Emit signal for the last item (or all?) - usually Preview shows only last clicked
+            # If multiple selected, we might confuse preview. Update preview if focused.
+            if item == self.list_widget.currentItem():
+                path = item.data(Qt.ItemDataRole.UserRole)
+                self.file_rotated.emit(path, new_angle)
+
+    def _reset_rotation(self):
+        items = self.list_widget.selectedItems()
+        if not items: return
+        
+        for item in items:
+            self._update_item_rotation(item, 0)
+            if item == self.list_widget.currentItem():
+                path = item.data(Qt.ItemDataRole.UserRole)
+                self.file_rotated.emit(path, 0)
+
+    def _update_item_rotation(self, item, angle):
+        item.setData(Qt.ItemDataRole.UserRole + 1, angle)
+        
+        # Update Icon
+        path = item.data(Qt.ItemDataRole.UserRole)
+        if os.path.exists(path):
+            pix = QPixmap(path)
+            if not pix.isNull() and angle != 0:
+                transform = list_transform = None
+                # QPixmap rotation
+                from PyQt6.QtGui import QTransform
+                t = QTransform().rotate(angle)
+                pix = pix.transformed(t, Qt.TransformationMode.SmoothTransformation)
+            
+            # Scale for Icon
+            # Cache handled by OS/Qt mostly, but rotating full pixmap everytime might be slow for huge lists? 
+            # It's manual action, so okay.
+            item.setIcon(QIcon(pix))
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -297,6 +368,7 @@ class FileQueueWidget(QWidget):
 
         item = QListWidgetItem(os.path.basename(path))
         item.setData(Qt.ItemDataRole.UserRole, path)
+        item.setData(Qt.ItemDataRole.UserRole + 1, 0) # Init Rotation 0
         item.setIcon(QIcon(path))
         item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
         item.setCheckState(Qt.CheckState.Unchecked)
@@ -318,6 +390,23 @@ class FileQueueWidget(QWidget):
 
     def get_all_files(self):
         return [self.list_widget.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.list_widget.count())]
+
+    def get_all_tasks(self):
+        """Returns list of (path, angle) tuples"""
+        tasks = []
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            path = item.data(Qt.ItemDataRole.UserRole)
+            angle = item.data(Qt.ItemDataRole.UserRole + 1) or 0
+            tasks.append((path, angle))
+        return tasks
+
+    def get_rotation(self, path):
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == path:
+                return item.data(Qt.ItemDataRole.UserRole + 1) or 0
+        return 0
 
     def select_item_by_path(self, path):
         """경로에 해당하는 아이템을 선택 상태로 변경 (시그널 발생 없음)"""

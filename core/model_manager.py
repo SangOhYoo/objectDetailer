@@ -2,6 +2,7 @@ import os
 import torch
 import threading
 import gc
+import warnings
 from diffusers import (
     StableDiffusionInpaintPipeline,
     StableDiffusionControlNetInpaintPipeline,
@@ -54,14 +55,19 @@ class ModelManager:
             'cn': controlnet_path, 'clip': clip_skip
         }
         
+        # [Fix] Remove Forced Reloading (It causes VRAM spikes without proper cleanup)
+        # if self.pipe is not None and self.current_config == new_config:
+        #     # return
+        #     print("[ModelManager] Force reloading pipeline to prevent tensor leakage (User Request)")
+        #     pass
+        
+        # [Smart Cache] Reuse pipeline if config matches
         if self.pipe is not None and self.current_config == new_config:
-            return
+             return
 
         with self._lock:
-            if self.pipe: del self.pipe
-            self.pipe = None
-            gc.collect()
-            torch.cuda.empty_cache()
+            self.unload_model() # Ensure clean state
+
             print(f"[ModelManager] Loading model: {os.path.basename(ckpt_path)} (ClipSkip: {clip_skip})")
             
             # ControlNet
@@ -95,8 +101,17 @@ class ModelManager:
             # 'accelerate'가 init_empty_weights를 사용하여 모델을 meta device에 올리면 LoRA 로딩 시 에러 발생 가능성이 높습니다.
             # 메모리 사용량은 늘어나지만 안정성을 위해 False로 강제합니다.
             # [Fix] device_map=None explicitly demanded to prevent accelerate form creating meta tensors
+            
+            # [Fix] CPU Mode Compatibility
+            # If running on CPU, we must use float32. Float16 is not supported for most ops on CPU.
+            use_float16 = True
+            if self.device == "cpu" or (hasattr(self.device, "type") and self.device.type == "cpu"):
+                use_float16 = False
+            
             load_args = {
-                "torch_dtype": torch.float16, 
+                # [Fix] 로딩 시 float16 금지 (Meta Tensor 오류 방지)
+                # 우선 float32로 로드한 뒤, 안전하게 Cast 합니다.
+                "torch_dtype": torch.float32, 
                 "safety_checker": None, 
                 "use_safetensors": True, 
                 "low_cpu_mem_usage": False,
@@ -138,7 +153,12 @@ class ModelManager:
                 self.pipe.text_encoder.text_model.encoder.layers = self.pipe.text_encoder.text_model.encoder.layers[:-(clip_skip - 1)]
 
             # [Fix] OOM 방지를 위한 메모리 최적화 및 Offload 적용
-            # 1. 데이터 타입 변환 (fp16) -> 이미 load_args에서 torch_dtype=torch.float16으로 로드함
+            # 1. 데이터 타입 변환 (fp16) - 로딩 후 변환
+            if use_float16:
+                 if hasattr(self.pipe, "unet"): self.pipe.unet.to(dtype=torch.float16)
+                 if hasattr(self.pipe, "text_encoder"): self.pipe.text_encoder.to(dtype=torch.float16)
+                 if hasattr(self.pipe, "text_encoder_2"): self.pipe.text_encoder_2.to(dtype=torch.float16)
+                 if controlnet: self.pipe.controlnet.to(dtype=torch.float16)
             # self.pipe.unet.to(dtype=torch.float16)
             # self.pipe.text_encoder.to(dtype=torch.float16)
             # if controlnet: self.pipe.controlnet.to(dtype=torch.float16)
@@ -175,22 +195,45 @@ class ModelManager:
             elif hasattr(self.pipe, 'enable_vae_tiling'):
                 self.pipe.enable_vae_tiling()
 
-            # 4. GPU로 이동 (Standard)
-            # [Fix] OOM 방지를 위해 CPU Offload 활성화.
-            # 파이프라인의 각 부분을 필요할 때만 VRAM으로 로드하여 메모리를 크게 절약합니다.
-            # 멀티 GPU 환경에서 각 워커가 독립적으로 작동하도록 device를 명시합니다.
-            # [Fix] SDXL 모델은 VRAM 소모가 크므로 CPU Offload를 사용하여 OOM 방지
-            if is_sdxl:
-                # [Fix] Dual GPU 환경에서 enable_model_cpu_offload는 Global Hook 충돌을 일으키므로,
-                # VRAM이 충분하다면 .to(device)를 사용하거나 enable_sequential_cpu_offload를 고려해야 함.
-                # 여기서는 안정성을 위해 .to(device)로 변경하되, VRAM 부족 시 sequential_offload로 fallback하는 로직이 필요할 수 있음.
-                # 우선 사용자 제안대로 .to(device)를 시도.
-                self.pipe.to(self.device)
-            else:
+            # 4. CPU Offload 활성화 (Standard)
+            # [Fix] 모든 모델에 대해 enable_model_cpu_offload 사용
+            # 이는 각 컴포넌트(UNet, VAE, TextEncoder)를 필요할 때만 GPU로 올리고 사용 후 즉시 CPU로 내립니다.
+            # VRAM 사용량을 획기적으로 줄여줍니다 (속도는 약간 느려질 수 있음).
+            try:
+                # gpu_id logic
+                gpu_id = 0
+                if isinstance(self.device, str) and self.device.startswith("cuda:"):
+                        try:
+                            gpu_id = int(self.device.split(":")[1])
+                        except:
+                            pass
+                
+                # enable_model_cpu_offload is preferred over sequential for non-SDXL usually, 
+                # but enable_model_cpu_offload allows standard offloading.
+                # enable_sequential_cpu_offload is even more aggressive (offloads blocks).
+                
+                print(f"[ModelManager] Enabling Model CPU Offload (GPU: {gpu_id})")
+                self.pipe.enable_model_cpu_offload(gpu_id=gpu_id)
+                # self.pipe.enable_sequential_cpu_offload(gpu_id=gpu_id) # Too slow for 1.5? stick to model offload.
+                
+            except Exception as e:
+                print(f"[ModelManager] Failed to enable CPU offload: {e}. Fallback to GPU.")
                 self.pipe.to(self.device)
 
             self.current_config = new_config
             self.loaded_loras = [] # 모델이 바뀌면 LoRA 상태 초기화
+
+    def unload_model(self):
+        """[New] Force unload pipeline to free VRAM"""
+        if self.pipe:
+            print("[ModelManager] Unloading pipeline...")
+            del self.pipe
+            self.pipe = None
+            self.current_config = {}
+            self.loaded_loras = []
+        
+        gc.collect()
+        torch.cuda.empty_cache()
 
     def manage_lora(self, lora_list, action="load"):
         """LoRA 주입 및 해제"""
@@ -242,14 +285,53 @@ class ModelManager:
         adapter_weights = []
 
         for i, (name, scale) in enumerate(lora_list):
-            if not name.endswith(('.safetensors', '.ckpt', '.pt')):
-                name += ".safetensors"
-                
             lora_path = os.path.join(lora_base, name)
-            if os.path.exists(lora_path):
+            
+            # [Fix] Smart Extension & Recursive Search
+            found = False
+            # 1. Direct Check
+            if os.path.exists(lora_path) and os.path.isfile(lora_path):
+                 found = True
+            else:
+                 # 2. Try extensions
+                 for ext in ['.safetensors', '.pt', '.ckpt']:
+                     try_path = lora_path
+                     if not try_path.lower().endswith(ext):
+                         try_path += ext
+                     
+                     if os.path.exists(try_path) and os.path.isfile(try_path):
+                         lora_path = try_path
+                         found = True
+                         break
+            
+            # 3. Recursive Search if still not found
+            if not found:
+                 base_name = os.path.basename(name)
+                 # Normalize base_name by removing extension for searching
+                 search_name = os.path.splitext(base_name)[0]
+                 
+                 for root, dirs, files in os.walk(lora_base):
+                     for f in files:
+                         if f.lower().startswith(search_name.lower()):
+                             # Check exact match or with extension
+                             f_no_ext = os.path.splitext(f)[0]
+                             if f_no_ext.lower() == search_name.lower():
+                                 potential_path = os.path.join(root, f)
+                                 if potential_path.lower().endswith(('.safetensors', '.pt', '.ckpt')):
+                                     lora_path = potential_path
+                                     found = True
+                                     print(f"[ModelManager] Found LoRA via recursive search: {lora_path}")
+                                     break
+                     if found: break
+            
+            if found:
                 adapter_name = f"lora_{i}"
                 try:
-                    self.pipe.load_lora_weights(lora_path, adapter_name=adapter_name)
+                    # [Fix] Suppress expected warnings due to Clip Skip (missing layers) and torch.load safety
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings("ignore", message=".*unexpected keys not found in the model.*")
+                        warnings.filterwarnings("ignore", category=FutureWarning, message=".*weights_only=False.*")
+                        self.pipe.load_lora_weights(lora_path, adapter_name=adapter_name)
                 except Exception as e:
                     # [Fix] 1x1 Conv vs Linear dimension mismatch fallback
                     err_msg = str(e)

@@ -11,7 +11,7 @@ paths:
   controlnet: D:/AI_Models/ControlNet
   gfpgan: D:/AI_Models/GFPGAN
 files:
-  checkpoint_file: ultra_v7.safetensors
+  checkpoint_file: realDream_sdxl8.safetensors
   sam_file: sam3.pt
   sam_config: eval_base.yaml
   vae_file: sdxl_vae.safetensors
@@ -22,85 +22,107 @@ defaults:
   denoise: 0.4
   controlnet_weight: 0.5
   sort_method: 신뢰도
+  max_det: 20
 ui_settings:
   패스 1:
     enabled: false
-    detector_model: person_yolov8n-seg.pt
-    use_sam: false
-    auto_prompt_injection: true
-    gender_filter: All
-    ignore_edge_touching: false
-    anatomy_check: false
-    auto_rotate: false
-    color_fix: Wavelet
-    use_hires_fix: false
-    pos_prompt: Stable_Yogis_PDXL_Positives, score 9, score 8 up, score 7 up, score
-      6 up, real, realism, source photo, source realism, photo, film grain, depth
-      of field, Breathtaking, highly detailed, sharp focus, completely nude
-    neg_prompt: Stable_Yogis_PDXL_Negatives-neg, score 6, score 5, score 4, deformed,
-      deformed face, low quality, bad quality, worst quality, (drawn, furry, illustration,
-      cartoon, anime, comic:1.5), 3d, cgi, extra fingers, (source anime, source cartoon,
-      source furry, source western, source comic, source pony), deformed teeth, small
-      breasts, small chest, camera, Beards, glasses, futanari, collage
-    max_det: 1
-    sort_method: 신뢰도
-    use_controlnet: false
-    control_model: None
-    control_module: None
-    sep_noise: false
-    inpaint_width: 512
-    inpaint_height: 512
-    use_noise_mask: false
-    mask_merge_mode: false
-    sep_ckpt: false
-    sep_ckpt_name: Use Global
-    sep_vae: false
-    sep_vae_name: Use Global
-    sep_sampler: true
-    sampler_name: DPM++ 2M Karras
-    sep_steps: true
-    steps: 20
-    sep_cfg: false
-    cfg_scale: 7.0
-    sep_clip: true
-    clip_skip: 2
-    restore_face: true
-    conf_thresh: 0.7
-    min_face_ratio: 0.01
-    max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 64
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
-    mask_dilation: 8
-    mask_erosion: 0
-    mask_blur: 24
-    x_offset: 0
-    y_offset: 0
-    control_weight: 1.0
-    guidance_start: 0.0
-    guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
-    seed: -1
-  패스 2:
-    enabled: true
-    detector_model: Anzhcs ManFace v02 1024 y8n.pt
+    detector_model: person_yolov8s-seg.pt
     yolo_classes: ''
     use_sam: false
+    pos_prompt: '1girl, super model body, completely nude,(large breasts:1.1), [SEP]
+
+      1boy, completely nude, erect penis, [SEP]'
+    neg_prompt: Stable_Yogis_PDXL_Negatives-neg, score 6, score 5, score 4,
     auto_prompt_injection: true
     gender_filter: All
     ignore_edge_touching: false
     anatomy_check: false
     use_pose_rotation: false
+    max_det: 2
+    inpaint_width: 1024
+    inpaint_height: 1024
+    mask_merge_mode: None
+    use_noise_mask: false
     auto_rotate: false
-    color_fix: Adain
-    use_hires_fix: false
-    pos_prompt: '(masterpiece), (best quality), (high resolution), (photorealistic),
-      [<lora:sangoh-10:0.7>:(21 years old asian boy:0.2)], pale skin, (glossy skin:1.1),
-      looking at another, (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed,
-      aroused, moaning, ecstacy:1.6), (shocked:1.2), [SEP],
+    color_fix: None
+    control_model: None
+    control_module: None
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    bmab_enabled: false
+    resize_enable: false
+    resize_align: Center
+    sort_method: 신뢰도
+    sep_ckpt: true
+    sep_ckpt_name: pinkiepiePonyMix_v36Fp16.safetensors
+    sep_vae: true
+    sep_vae_name: sdxl_vae.safetensors
+    sep_sampler: true
+    sampler_name: DPM++ 2M Karras
+    sep_steps: true
+    steps: 24
+    sep_cfg: true
+    cfg_scale: 7.0
+    sep_clip: true
+    clip_skip: 2
+    restore_face: false
+    use_hires_fix: true
+    sep_noise: false
+    conf_thresh: 0.35
+    min_face_ratio: 0.01
+    max_face_ratio: 1.0
+    mask_dilation: 4
+    mask_erosion: 0
+    mask_blur: 12
+    x_offset: 0
+    y_offset: 0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
+    denoising_strength: 0.6
+    context_expand_factor: 1.5
+    crop_padding: 32
+    control_weight: 0.5
+    guidance_start: 0.0
+    guidance_end: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_temp: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
+    seed: -1
+  패스 2:
+    enabled: true
+    detector_model: Anzhc Face -seg.pt
+    yolo_classes: 'face
+
+      face
+
+      face'
+    use_sam: false
+    pos_prompt: '(masterpiece), (best quality), (high resolution), hyper realistic,
+      raw photo, detailed skin texture, pores, peach fuzz, visible skin details, high
+      resolution, 8k, dslr, (photorealistic:1.4), <lora:polyhedron_new_skin_v1.1:0.1>,
+      detailed skin,  [<lora:sangoh-10:0.7>:(21 years old asian boy:0.2)], (open eyes:1.2),[SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), [<lora:sangoh-10:0.7>:(21
+      years old asian boy:0.2)], pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), [SEP]
 
       (masterpiece), (best quality), (high resolution), (photorealistic), <lora:eunwoo:0.8>eunwoo,
       (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7), (full-face
@@ -178,18 +200,37 @@ ui_settings:
       [SEP]'
     neg_prompt: (worst quality, low quality, normal quality, lowres, bokeh, blur:2.0),
       (polydactyly, polydactylism:2.0)
+    auto_prompt_injection: true
+    gender_filter: All
+    ignore_edge_touching: false
+    anatomy_check: true
+    use_pose_rotation: false
     max_det: 1
-    sort_method: 신뢰도
-    use_controlnet: false
-    control_model: None
-    control_module: None
-    sep_noise: false
     inpaint_width: 512
     inpaint_height: 512
-    use_noise_mask: false
     mask_merge_mode: None
+    use_noise_mask: false
+    auto_rotate: true
+    color_fix: Adain
+    control_model: None
+    control_module: None
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    hires_upscaler: 4x-UltraSharp.pth
+    bmab_enabled: true
     resize_enable: false
     resize_align: Center
+    sort_method: 위치(우에서 좌)
     sep_ckpt: true
     sep_ckpt_name: henmix_real_v6b-fp16-no-ema.safetensors
     sep_vae: true
@@ -202,13 +243,15 @@ ui_settings:
     cfg_scale: 7.0
     sep_clip: true
     clip_skip: 2
-    restore_face: false
-    conf_thresh: 0.3
-    min_face_ratio: 0.0
+    restore_face: true
+    use_hires_fix: false
+    sep_noise: false
+    conf_thresh: 0.02
+    min_face_ratio: 0.001
     max_face_ratio: 1.0
     mask_dilation: 4
     mask_erosion: 0
-    mask_blur: 12
+    mask_blur: 4
     x_offset: 0
     y_offset: 0
     sam_points_per_side: 32
@@ -217,37 +260,45 @@ ui_settings:
     denoising_strength: 0.4
     context_expand_factor: 1.0
     crop_padding: 32
-    control_weight: 1.0
+    control_weight: 0.5
     guidance_start: 0.0
     guidance_end: 1.0
     bmab_contrast: 1.0
     bmab_brightness: 1.0
     bmab_sharpness: 1.0
-    bmab_color_temp: 0.0
+    bmab_color_saturation: 1.0
+    bmab_color_temperature: 0.0
     bmab_noise_alpha: 0.0
+    bmab_noise_alpha_final: 0.0
     bmab_edge_strength: 0.0
     bmab_edge_low: 50
     bmab_edge_high: 200
     resize_ratio: 0.6
+    hires_upscale_factor: 1.5
+    hires_steps: 14
+    hires_denoise: 0.65
+    hires_width: 0
+    hires_height: 0
+    hires_cfg: 5.0
     seed: -1
   패스 3:
     enabled: true
     detector_model: Anzhcs WomanFace v05 1024 y8n.pt
     yolo_classes: ''
     use_sam: false
-    auto_prompt_injection: true
-    gender_filter: All
-    ignore_edge_touching: false
-    anatomy_check: false
-    use_pose_rotation: false
-    auto_rotate: false
-    color_fix: Adain
-    use_hires_fix: false
     pos_prompt: '(masterpiece), (best quality), (high resolution), (photorealistic),
-      [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>], pale skin, (glossy skin:1.1),
-      looking at another, (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed,
-      aroused, moaning, ecstacy:1.6), (shocked:1.2), (closed eyes:1.2), (open mouth:1.4),
-      (female orgasm:1.4), [SEP],
+      [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>],  <lora:orgasm face_v2:1.2>,
+      orgasm face, female orgasm, orgasm,pale skin, (glossy skin:1.1), (half-closed
+      eyes:1.2), (wide open mouth:1.7), (full-face blush:1.6), (shocked:1.2), [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic:1.4), <lora:polyhedron_new_skin_v1.1:0.1>,
+      detailed skin, [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>], (closed eyes:1.2),
+      (open mouth:1.4), [SEP],
+
+      (masterpiece), (best quality), (high resolution), hyper realistic, raw photo,
+      detailed skin texture, pores, peach fuzz, visible skin details, high resolution,
+      8k, dslr, (photorealistic:1.4), <lora:polyhedron_new_skin_v1.1:0.1>, detailed
+      skin, [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>], (open eyes:1.2),[SEP],
 
       (masterpiece), (best quality), (high resolution), (photorealistic), <lora:sunyoung-09:0.7>,
       pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
@@ -1196,18 +1247,42 @@ ui_settings:
       parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP]'
     neg_prompt: (worst quality, low quality, normal quality, lowres, bokeh, blur:2.0),
       (polydactyly, polydactylism:2.0)
+    auto_prompt_injection: true
+    gender_filter: All
+    ignore_edge_touching: false
+    anatomy_check: false
+    use_pose_rotation: false
     max_det: 1
-    sort_method: 신뢰도
-    use_controlnet: false
-    control_model: None
-    control_module: None
-    sep_noise: false
     inpaint_width: 512
     inpaint_height: 512
-    use_noise_mask: false
     mask_merge_mode: None
+    use_noise_mask: false
+    auto_rotate: true
+    color_fix: Adain
+    mask_content: original
+    inpaint_full_res: false
+    use_soft_inpainting: false
+    control_model: None
+    control_module: None
+    dd_enabled: true
+    dd_amount: 1.0
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.91
+    dd_exponent: 2.58
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    hires_upscaler: 4x-UltraSharp.pth
+    bmab_enabled: false
     resize_enable: false
     resize_align: Center
+    bmab_landscape_detail: false
+    bmab_edge_enabled: false
+    sort_method: 위치(우에서 좌)
     sep_ckpt: true
     sep_ckpt_name: henmix_real_v6b-fp16-no-ema.safetensors
     sep_vae: true
@@ -1217,12 +1292,117 @@ ui_settings:
     sep_steps: true
     steps: 24
     sep_cfg: true
-    cfg_scale: 7.0
+    cfg_scale: 5.0
     sep_clip: true
     clip_skip: 2
     restore_face: false
-    conf_thresh: 0.3
-    min_face_ratio: 0.0
+    use_hires_fix: false
+    sep_noise: true
+    conf_thresh: 0.62
+    min_face_ratio: 0.001
+    max_face_ratio: 1.0
+    mask_dilation: 4
+    mask_erosion: 0
+    mask_blur: 4
+    x_offset: 0
+    y_offset: 0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
+    denoising_strength: 0.4
+    context_expand_factor: 1.1
+    crop_padding: 32
+    soft_schedule_bias: 1.0
+    soft_preservation_strength: 0.5
+    soft_transition_contrast: 4.0
+    soft_mask_influence: 0.0
+    soft_diff_threshold: 0.5
+    soft_diff_contrast: 2.0
+    control_weight: 0.5
+    guidance_start: 0.0
+    guidance_end: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_saturation: 1.0
+    bmab_color_temperature: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_noise_alpha_final: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
+    hires_upscale_factor: 1.5
+    hires_steps: 14
+    hires_denoise: 0.65
+    hires_width: 0
+    hires_height: 0
+    hires_cfg: 5.0
+    seed: -1
+  패스 4:
+    enabled: false
+    detector_model: breasts_seg.pt
+    yolo_classes: ''
+    use_sam: false
+    pos_prompt: score 9, score 8 up, score 7 up, score 6 up, zPDXL3, 8k uhd, (pale
+      skin:0.9), (large breasts:1.1), (detailed nipples, normal nipples, cute nipples,
+      puffy nipples), hyper realistic, raw photo, detailed skin texture, pores, peach
+      fuzz, visible skin details, high resolution, 8k, dslr, [SEP],
+    neg_prompt: score 6, score 5, score 4, pony, muscular, makeup, censored, furry,
+      (child, kid, chibi:1.1), big breasts, big chest, cgi, [SEP],
+    auto_prompt_injection: true
+    gender_filter: All
+    ignore_edge_touching: false
+    anatomy_check: false
+    use_pose_rotation: false
+    max_det: 20
+    inpaint_width: 1024
+    inpaint_height: 1024
+    mask_merge_mode: None
+    use_noise_mask: false
+    auto_rotate: false
+    color_fix: None
+    mask_content: original
+    inpaint_full_res: false
+    use_soft_inpainting: false
+    control_model: None
+    control_module: None
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    hires_upscaler: None
+    bmab_enabled: true
+    resize_enable: false
+    resize_align: Center
+    bmab_landscape_detail: false
+    bmab_edge_enabled: false
+    sort_method: 신뢰도
+    sep_ckpt: false
+    sep_ckpt_name: Use Global
+    sep_vae: false
+    sep_vae_name: Use Global
+    sep_sampler: true
+    sampler_name: DPM++ 2M Karras
+    sep_steps: false
+    steps: 20
+    sep_cfg: false
+    cfg_scale: 7.0
+    sep_clip: false
+    clip_skip: 2
+    restore_face: false
+    use_hires_fix: true
+    sep_noise: false
+    conf_thresh: 0.14
+    min_face_ratio: 0.01
     max_face_ratio: 1.0
     mask_dilation: 4
     mask_erosion: 0
@@ -1233,9 +1413,107 @@ ui_settings:
     sam_pred_iou_thresh: 0.88
     sam_stability_score_thresh: 0.95
     denoising_strength: 0.4
-    context_expand_factor: 1.0
+    context_expand_factor: 1.5
     crop_padding: 32
-    control_weight: 1.0
+    soft_schedule_bias: 1.0
+    soft_preservation_strength: 0.5
+    soft_transition_contrast: 4.0
+    soft_mask_influence: 0.0
+    soft_diff_threshold: 0.5
+    soft_diff_contrast: 2.0
+    control_weight: 0.5
+    guidance_start: 0.0
+    guidance_end: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_saturation: 1.0
+    bmab_color_temperature: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_noise_alpha_final: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
+    hires_upscale_factor: 1.5
+    hires_steps: 14
+    hires_denoise: 0.4
+    hires_width: 0
+    hires_height: 0
+    hires_cfg: 5.0
+    seed: -1
+  패스 5:
+    enabled: false
+    detector_model: PitHandDetailer-v1b-seg.pt
+    yolo_classes: ''
+    use_sam: false
+    pos_prompt: score 9, score 8 up, score 7 up, score 6 up, zPDXL3, 8k uhd, (good
+      anatomy:1.2), (five fingers:1.4), lovely hand, detailed hand, delicate fingers,
+      detailed fingers, girl's hand, girl's pretty hand, small hand, small pretty
+      girl's hand, good hand, perfect hand, woman hand, (glossy skin:1.3), [SEP],
+    neg_prompt: score 6, score 5, score 4, pony, bad anatomy, bad hands, bad feet,
+      missing fingers, fewer fingers, strange fingers, extra digit, fewer digits,
+      [SEP],
+    auto_prompt_injection: true
+    gender_filter: All
+    ignore_edge_touching: false
+    anatomy_check: false
+    use_pose_rotation: false
+    max_det: 20
+    inpaint_width: 512
+    inpaint_height: 512
+    mask_merge_mode: None
+    use_noise_mask: false
+    auto_rotate: false
+    color_fix: None
+    control_model: None
+    control_module: None
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    bmab_enabled: true
+    resize_enable: false
+    resize_align: Center
+    sort_method: 신뢰도
+    sep_ckpt: false
+    sep_ckpt_name: Use Global
+    sep_vae: false
+    sep_vae_name: Use Global
+    sep_sampler: false
+    sampler_name: Euler a Automatic
+    sep_steps: false
+    steps: 20
+    sep_cfg: false
+    cfg_scale: 7.0
+    sep_clip: false
+    clip_skip: 2
+    restore_face: false
+    use_hires_fix: false
+    sep_noise: false
+    conf_thresh: 0.13
+    min_face_ratio: 0.001
+    max_face_ratio: 1.0
+    mask_dilation: 4
+    mask_erosion: 0
+    mask_blur: 12
+    x_offset: 0
+    y_offset: 0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
+    denoising_strength: 0.4
+    context_expand_factor: 1.5
+    crop_padding: 32
+    control_weight: 0.5
     guidance_start: 0.0
     guidance_end: 1.0
     bmab_contrast: 1.0
@@ -1248,187 +1526,52 @@ ui_settings:
     bmab_edge_high: 200
     resize_ratio: 0.6
     seed: -1
-  패스 4:
-    enabled: false
-    detector_model: Anzhc Breasts Seg v1 1024n.pt
-    use_sam: false
-    auto_prompt_injection: true
-    gender_filter: Female
-    ignore_edge_touching: false
-    anatomy_check: false
-    auto_rotate: false
-    color_fix: None
-    use_hires_fix: false
-    pos_prompt: 'score 9, score 8 up, score 7 up, score 6 up, zPDXL3, 8k uhd, (pale
-      skin:0.9), (large breasts:1.1), (detailed nipples, normal nipples, cute nipples,
-      puffy nipples), [SEP],
-
-      score 9, score 8 up, score 7 up, score 6 up, zPDXL3, 8k uhd, [SEP],
-
-      [SKIP][SEP],
-
-      #(gigantic breasts:1.4), detailed nipples, normal nipples, cute nipples, puffy
-      pink nipples, RAW photo, (completely nude:1.4), <lora:polyhedron_new_skin_v1.1:0.1>detailed
-      skin, skin blemish, (high detailed skin:1.2), 8k uhd, dslr, soft lighting, high
-      quality, film grain, Fujifilm XT3, (glossy skin:1.3), [SEP]'
-    neg_prompt: 'score 6, score 5, score 4, pony, muscular, makeup, censored, furry,
-      (child, kid, chibi:1.1), big breasts, big chest, cgi, [SEP],
-
-      #(low resolution:1.5), (worst quality:1.5), (low quality:1.5), logo, signature,
-      watermark, BadDream, UnrealisticDream, [SEP]'
-    max_det: 1
-    sort_method: 신뢰도
-    use_controlnet: false
-    control_model: None
-    control_module: None
-    sep_noise: false
-    inpaint_width: 1024
-    inpaint_height: 1024
-    use_noise_mask: false
-    mask_merge_mode: false
-    sep_ckpt: true
-    sep_ckpt_name: pinkiepiePonyMix_v36Fp16.safetensors
-    sep_vae: true
-    sep_vae_name: sdxl_vae.safetensors
-    sep_sampler: true
-    sampler_name: DPM++ 2M Karras
-    sep_steps: true
-    steps: 22
-    sep_cfg: false
-    cfg_scale: 7.0
-    sep_clip: true
-    clip_skip: 2
-    restore_face: false
-    conf_thresh: 0.3
-    min_face_ratio: 0.01
-    max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
-    mask_dilation: 4
-    mask_erosion: 0
-    mask_blur: 12
-    x_offset: 0
-    y_offset: 0
-    control_weight: 1.0
-    guidance_start: 0.0
-    guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
-    seed: -1
-  패스 5:
-    enabled: false
-    detector_model: hand_yolov8n.pt
-    use_sam: false
-    auto_prompt_injection: true
-    gender_filter: All
-    ignore_edge_touching: false
-    anatomy_check: false
-    auto_rotate: false
-    color_fix: None
-    use_hires_fix: false
-    pos_prompt: 'score 9, score 8 up, score 7 up, score 6 up, zPDXL3, 8k uhd, (good
-      anatomy:1.2), (five fingers:1.4), lovely hand, detailed hand, delicate fingers,
-      detailed fingers, girl''s hand, girl''s pretty hand, small hand, small pretty
-      girl''s hand, good hand, perfect hand, woman hand, (glossy skin:1.3), [SEP],
-
-      #masterpiece, best quality, (good anatomy:1.2), (five fingers:1.4), lovely hand,
-      detailed hand, delicate fingers, detailed fingers, girl''s hand, girl''s pretty
-      hand, small hand, small pretty girl''s hand, good hand, perfect hand, woman
-      hand, (glossy skin:1.3)'
-    neg_prompt: 'score 6, score 5, score 4, pony, bad anatomy, bad hands, bad feet,
-      missing fingers, fewer fingers, strange fingers, extra digit, fewer digits,
-      [SEP],
-
-      #(low resolution:1.5), (worst quality:1.5), (low quality:1.5), logo, signature,
-      watermark, bad anatomy, bad hands, bad feet, missing fingers, fewer fingers,
-      strange fingers, extra digit, fewer digits, [SEP]'
-    max_det: 20
-    sort_method: 위치(좌에서 우)
-    use_controlnet: false
-    control_model: None
-    control_module: None
-    sep_noise: false
-    inpaint_width: 1024
-    inpaint_height: 1024
-    use_noise_mask: false
-    mask_merge_mode: false
-    sep_ckpt: false
-    sep_ckpt_name: Use Global
-    sep_vae: false
-    sep_vae_name: Use Global
-    sep_sampler: false
-    sampler_name: Euler a Karras
-    sep_steps: false
-    steps: 20
-    sep_cfg: false
-    cfg_scale: 7.0
-    sep_clip: false
-    clip_skip: 2
-    restore_face: false
-    conf_thresh: 0.35
-    min_face_ratio: 0.01
-    max_face_ratio: 1.0
-    denoising_strength: 0.5
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
-    mask_dilation: 4
-    mask_erosion: 0
-    mask_blur: 12
-    x_offset: 0
-    y_offset: 0
-    control_weight: 1.0
-    guidance_start: 0.0
-    guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
-    seed: -1
   패스 6:
     enabled: false
     detector_model: vagina-v4.2.pt
+    yolo_classes: ''
     use_sam: false
+    pos_prompt: Stable Yogis PDXL Positives, <lora:Pubic Hair Slider - Pony_alpha1.0_rank4_noxattn_last:1.5>,
+      pussy, vagina, clitoris, cervix, urethra,[SEP]
+    neg_prompt: Stable Yogis PDXL Negatives-neg, score 6, score 5, score 4, pony,
+      muscular, makeup, censored, furry, (child, kid, chibi:1.1), big breasts, big
+      chest, cgi, [SEP],
     auto_prompt_injection: true
     gender_filter: All
     ignore_edge_touching: false
     anatomy_check: false
+    use_pose_rotation: false
+    max_det: 20
+    inpaint_width: 512
+    inpaint_height: 512
+    mask_merge_mode: None
+    use_noise_mask: false
     auto_rotate: false
     color_fix: None
-    use_hires_fix: false
-    pos_prompt: 'Stable Yogis PDXL Positives, <lora:Pubic Hair Slider - Pony_alpha1.0_rank4_noxattn_last:1.5>,
-      pussy, vagina, clitoris, cervix, urethra,
-
-      #Stable Yogis PDXL Positives, score 9, score 8 up, score 7 up, score 6 up, zPDXL3,
-      8k uhd, (Realistic and natural Pubic hair:1.1), clitoris, cervix, urethra, [SEP],
-
-      #(masterpiece), (best quality), (high resolution), <lora:Hairy Pubic Hair:0.7>pubic
-      hair, female pubic hair, hairy pubic hair, natural pubic hair, unshaven pubic
-      hair, women pubic hair, (Realistic and natural Pubic hair:1.4)'
-    neg_prompt: 'Stable Yogis PDXL Negatives-neg, score 6, score 5, score 4, pony,
-      muscular, makeup, censored, furry, (child, kid, chibi:1.1), big breasts, big
-      chest, cgi, [SEP],
-
-      #(low resolution:1.5), (worst quality:1.5), (low quality:1.5), logo, signature,
-      watermark'
-    max_det: 1
-    sort_method: 신뢰도
-    use_controlnet: false
     control_model: None
     control_module: None
-    sep_noise: false
-    inpaint_width: 1024
-    inpaint_height: 1024
-    use_noise_mask: false
-    mask_merge_mode: false
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    bmab_enabled: true
+    resize_enable: false
+    resize_align: Center
+    sort_method: 신뢰도
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
     sep_vae_name: Use Global
     sep_sampler: false
-    sampler_name: Euler a Karras
+    sampler_name: Euler a Automatic
     sep_steps: false
     steps: 20
     sep_cfg: false
@@ -1436,129 +1579,83 @@ ui_settings:
     sep_clip: false
     clip_skip: 2
     restore_face: false
-    conf_thresh: 0.35
-    min_face_ratio: 0.01
+    use_hires_fix: false
+    sep_noise: false
+    conf_thresh: 0.82
+    min_face_ratio: 0.001
     max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
     x_offset: 0
     y_offset: 0
-    control_weight: 1.0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
+    denoising_strength: 0.4
+    context_expand_factor: 1.5
+    crop_padding: 32
+    control_weight: 0.5
     guidance_start: 0.0
     guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_temp: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
     seed: -1
   패스 7:
     enabled: false
-    detector_model: penisV3.pt
+    detector_model: penisV2.pt
+    yolo_classes: ''
     use_sam: false
-    auto_prompt_injection: true
-    gender_filter: All
-    ignore_edge_touching: false
-    anatomy_check: true
-    auto_rotate: true
-    color_fix: None
-    use_hires_fix: false
     pos_prompt: 'score 9, score 8 up, score 7 up, score 6 up, zPDXL3, 8k uhd, (erect
       penis:1.2), (male pubic hair:1.1), (cum stains:1.1), [SEP],
 
       score 9, score 8 up, score 7 up, score 6 up, zPDXL3, 8k uhd, (huge flaccid penis:1.2),
-      (male pubic hair:1.1), (cum stains:1.1), [SEP],
-
-      #(masterpiece), (best quality), (high resolution), (male pubic hair:1.4), <lora:airoticartsPenisModel_v10Lora:1.4>penerec,
-      erect penis, [SEP],
-
-      #(masterpiece), (best quality), (high resolution), (male pubic hair:1.4), <lora:airoticartsPenisModel_v10Lora:1.4>penflac,
-      flaccid penis, [SEP]'
-    neg_prompt: 'score 6, score 5, score 4, pony, muscular, makeup, censored, furry,
+      (male pubic hair:1.1), (cum stains:1.1), [SEP],'
+    neg_prompt: score 6, score 5, score 4, pony, muscular, makeup, censored, furry,
       (child, kid, chibi:1.1), big breasts, big chest, cgi, [SEP],
-
-      #(low resolution:1.5), (worst quality:1.5), (low quality:1.5), logo, signature,
-      watermark'
-    max_det: 1
-    sort_method: 신뢰도
-    use_controlnet: false
-    control_model: None
-    control_module: None
-    sep_noise: false
-    inpaint_width: 1024
-    inpaint_height: 1024
-    use_noise_mask: false
-    mask_merge_mode: false
-    sep_ckpt: false
-    sep_ckpt_name: Use Global
-    sep_vae: false
-    sep_vae_name: Use Global
-    sep_sampler: false
-    sampler_name: Euler a Karras
-    sep_steps: false
-    steps: 20
-    sep_cfg: false
-    cfg_scale: 7.0
-    sep_clip: false
-    clip_skip: 2
-    restore_face: false
-    conf_thresh: 0.35
-    min_face_ratio: 0.01
-    max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
-    mask_dilation: 4
-    mask_erosion: 0
-    mask_blur: 12
-    x_offset: 0
-    y_offset: 0
-    control_weight: 1.0
-    guidance_start: 0.0
-    guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
-    seed: -1
-  패스 8:
-    enabled: false
-    detector_model: adetailerFootYolov8x_v10.pt
-    use_sam: false
     auto_prompt_injection: true
     gender_filter: All
     ignore_edge_touching: false
     anatomy_check: false
-    auto_rotate: false
-    color_fix: None
-    use_hires_fix: false
-    pos_prompt: 'Stable Yogis PDXL Positives, score 9, score 8 up, score 7 up, score
-      6 up, zPDXL3, 8k uhd, (barefoot:0.9), [SEP],
-
-      #(masterpiece), (best quality), (high resolution), (barefoot:1.4), [SEP]'
-    neg_prompt: 'Stable Yogis PDXL Negatives-neg, score 6, score 5, score 4, [SEP],
-
-      #(low resolution:1.5), (worst quality:1.5), (low quality:1.5), logo, signature,
-      watermark, BadDream, UnrealisticDream, [SEP]'
+    use_pose_rotation: false
     max_det: 20
-    sort_method: 신뢰도
-    use_controlnet: false
-    control_model: None
-    control_module: inpaint_global_harmonious
-    sep_noise: false
     inpaint_width: 1024
     inpaint_height: 1024
+    mask_merge_mode: None
     use_noise_mask: false
-    mask_merge_mode: false
+    auto_rotate: false
+    color_fix: None
+    control_model: None
+    control_module: None
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    bmab_enabled: false
+    resize_enable: false
+    resize_align: Center
+    sort_method: 신뢰도
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
     sep_vae_name: Use Global
     sep_sampler: false
-    sampler_name: Euler a Karras
+    sampler_name: Euler a Automatic
     sep_steps: false
     steps: 20
     sep_cfg: false
@@ -1566,61 +1663,161 @@ ui_settings:
     sep_clip: false
     clip_skip: 2
     restore_face: false
-    conf_thresh: 0.35
-    min_face_ratio: 0.01
+    use_hires_fix: false
+    sep_noise: false
+    conf_thresh: 0.67
+    min_face_ratio: 0.0
     max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
     x_offset: 0
     y_offset: 0
-    control_weight: 1.0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
+    denoising_strength: 0.5
+    context_expand_factor: 1.2
+    crop_padding: 32
+    control_weight: 0.5
     guidance_start: 0.0
     guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_temp: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
+    seed: -1
+  패스 8:
+    enabled: false
+    detector_model: adetailerFootYolov8x_v10.pt
+    yolo_classes: ''
+    use_sam: false
+    pos_prompt: Stable Yogis PDXL Positives, score 9, score 8 up, score 7 up, score
+      6 up, zPDXL3, 8k uhd, (barefoot:0.9), [SEP],
+    neg_prompt: Stable Yogis PDXL Negatives-neg, score 6, score 5, score 4, [SEP],
+    auto_prompt_injection: true
+    gender_filter: All
+    ignore_edge_touching: false
+    anatomy_check: false
+    use_pose_rotation: false
+    max_det: 20
+    inpaint_width: 512
+    inpaint_height: 512
+    mask_merge_mode: None
+    use_noise_mask: false
+    auto_rotate: false
+    color_fix: None
+    control_model: None
+    control_module: None
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    bmab_enabled: true
+    resize_enable: false
+    resize_align: Center
+    sort_method: 신뢰도
+    sep_ckpt: false
+    sep_ckpt_name: Use Global
+    sep_vae: false
+    sep_vae_name: Use Global
+    sep_sampler: false
+    sampler_name: Euler a Automatic
+    sep_steps: false
+    steps: 20
+    sep_cfg: false
+    cfg_scale: 7.0
+    sep_clip: false
+    clip_skip: 2
+    restore_face: false
+    use_hires_fix: false
+    sep_noise: false
+    conf_thresh: 0.35
+    min_face_ratio: 0.01
+    max_face_ratio: 1.0
+    mask_dilation: 4
+    mask_erosion: 0
+    mask_blur: 12
+    x_offset: 0
+    y_offset: 0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
+    denoising_strength: 0.4
+    context_expand_factor: 1.5
+    crop_padding: 32
+    control_weight: 0.5
+    guidance_start: 0.0
+    guidance_end: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_temp: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
     seed: -1
   패스 9:
     enabled: false
     detector_model: Anzhc Eyes -seg-hd.pt
     yolo_classes: ''
     use_sam: false
-    auto_prompt_injection: true
-    gender_filter: All
-    ignore_edge_touching: false
-    anatomy_check: false
-    use_pose_rotation: false
-    auto_rotate: false
-    color_fix: None
-    use_hires_fix: false
     pos_prompt: Stable Yogis PDXL Positives, professional photo of photorealistic
       eyes, Asian girl, brown eyes, sharp, absurdres, studio lighting, intricate,
       epic<lora:Super_Eye_Detailer_By_Stable_Yogi_SDPD0:0.7>, detailed eyes, photorealistic
       eyes, perfect eyes, freckles, perfect skin texture
     neg_prompt: Stable Yogis PDXL Negatives-neg
-    max_det: 2
-    sort_method: 신뢰도
-    use_controlnet: false
-    control_model: None
-    control_module: inpaint_global_harmonious
-    sep_noise: false
+    auto_prompt_injection: true
+    gender_filter: All
+    ignore_edge_touching: false
+    anatomy_check: false
+    use_pose_rotation: false
+    max_det: 20
     inpaint_width: 512
     inpaint_height: 512
-    use_noise_mask: false
     mask_merge_mode: None
+    use_noise_mask: false
+    auto_rotate: false
+    color_fix: None
+    control_model: None
+    control_module: None
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    bmab_enabled: true
     resize_enable: false
     resize_align: Center
+    sort_method: 신뢰도
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
     sep_vae_name: Use Global
     sep_sampler: false
-    sampler_name: Euler a Karras
+    sampler_name: Euler a Automatic
     sep_steps: false
     steps: 20
     sep_cfg: false
@@ -1628,6 +1825,8 @@ ui_settings:
     sep_clip: false
     clip_skip: 2
     restore_face: false
+    use_hires_fix: false
+    sep_noise: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
     max_face_ratio: 1.0
@@ -1640,9 +1839,9 @@ ui_settings:
     sam_pred_iou_thresh: 0.88
     sam_stability_score_thresh: 0.95
     denoising_strength: 0.4
-    context_expand_factor: 1.0
+    context_expand_factor: 1.5
     crop_padding: 32
-    control_weight: 1.0
+    control_weight: 0.5
     guidance_start: 0.0
     guidance_end: 1.0
     bmab_contrast: 1.0
@@ -1658,88 +1857,47 @@ ui_settings:
   패스 10:
     enabled: false
     detector_model: lips_v1.pt
+    yolo_classes: ''
     use_sam: false
-    auto_prompt_injection: true
-    gender_filter: All
-    ignore_edge_touching: false
-    anatomy_check: false
-    auto_rotate: false
-    color_fix: None
-    use_hires_fix: false
     pos_prompt: Stable Yogis PDXL Positives, (thick lips:0.8), parted lips, pink lipstick,
       (wearing pink lip-gloss:0.8), (glossy lips:1.1)
     neg_prompt: Stable Yogis PDXL Negatives-neg
-    max_det: 2
-    sort_method: 신뢰도
-    use_controlnet: false
-    control_model: None
-    control_module: inpaint_global_harmonious
-    sep_noise: false
-    inpaint_width: 1024
-    inpaint_height: 1024
-    use_noise_mask: false
-    mask_merge_mode: false
-    sep_ckpt: false
-    sep_ckpt_name: Use Global
-    sep_vae: false
-    sep_vae_name: Use Global
-    sep_sampler: false
-    sampler_name: Euler a Karras
-    sep_steps: false
-    steps: 20
-    sep_cfg: false
-    cfg_scale: 7.0
-    sep_clip: false
-    clip_skip: 2
-    restore_face: false
-    conf_thresh: 0.35
-    min_face_ratio: 0.01
-    max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
-    mask_dilation: 4
-    mask_erosion: 0
-    mask_blur: 12
-    x_offset: 0
-    y_offset: 0
-    control_weight: 1.0
-    guidance_start: 0.0
-    guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
-    seed: -1
-  패스 11:
-    enabled: false
-    detector_model: adetailerAfterDetailer_v10.pt
-    use_sam: false
     auto_prompt_injection: true
     gender_filter: All
     ignore_edge_touching: false
     anatomy_check: false
+    use_pose_rotation: false
+    max_det: 20
+    inpaint_width: 512
+    inpaint_height: 512
+    mask_merge_mode: None
+    use_noise_mask: false
     auto_rotate: false
     color_fix: None
-    use_hires_fix: false
-    pos_prompt: Stable Yogis PDXL Positives, teeth, smile, <lora:TeethXL:1.0>
-    neg_prompt: Stable Yogis PDXL Negatives-neg
-    max_det: 20
-    sort_method: 신뢰도
-    use_controlnet: false
     control_model: None
     control_module: None
-    sep_noise: false
-    inpaint_width: 1024
-    inpaint_height: 1024
-    use_noise_mask: false
-    mask_merge_mode: false
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    bmab_enabled: true
+    resize_enable: false
+    resize_align: Center
+    sort_method: 신뢰도
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
     sep_vae_name: Use Global
     sep_sampler: false
-    sampler_name: Euler a Karras
+    sampler_name: Euler a Automatic
     sep_steps: false
     steps: 20
     sep_cfg: false
@@ -1747,36 +1905,119 @@ ui_settings:
     sep_clip: false
     clip_skip: 2
     restore_face: false
+    use_hires_fix: false
+    sep_noise: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
     max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
     x_offset: 0
     y_offset: 0
-    control_weight: 1.0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
+    denoising_strength: 0.4
+    context_expand_factor: 1.5
+    crop_padding: 32
+    control_weight: 0.5
     guidance_start: 0.0
     guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_temp: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
+    seed: -1
+  패스 11:
+    enabled: false
+    detector_model: JTeethSeg.pt
+    yolo_classes: ''
+    use_sam: false
+    pos_prompt: Stable Yogis PDXL Positives, teeth, smile, <lora:TeethXL:1.0>
+    neg_prompt: Stable Yogis PDXL Negatives-neg
+    auto_prompt_injection: true
+    gender_filter: All
+    ignore_edge_touching: false
+    anatomy_check: false
+    use_pose_rotation: false
+    max_det: 20
+    inpaint_width: 512
+    inpaint_height: 512
+    mask_merge_mode: None
+    use_noise_mask: false
+    auto_rotate: false
+    color_fix: None
+    control_model: None
+    control_module: None
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    bmab_enabled: true
+    resize_enable: false
+    resize_align: Center
+    sort_method: 신뢰도
+    sep_ckpt: false
+    sep_ckpt_name: Use Global
+    sep_vae: false
+    sep_vae_name: Use Global
+    sep_sampler: false
+    sampler_name: Euler a Automatic
+    sep_steps: false
+    steps: 20
+    sep_cfg: false
+    cfg_scale: 7.0
+    sep_clip: false
+    clip_skip: 2
+    restore_face: false
+    use_hires_fix: false
+    sep_noise: false
+    conf_thresh: 0.35
+    min_face_ratio: 0.01
+    max_face_ratio: 1.0
+    mask_dilation: 4
+    mask_erosion: 0
+    mask_blur: 12
+    x_offset: 0
+    y_offset: 0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
+    denoising_strength: 0.4
+    context_expand_factor: 1.5
+    crop_padding: 32
+    control_weight: 0.5
+    guidance_start: 0.0
+    guidance_end: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_temp: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
     seed: -1
   패스 12:
     enabled: false
     detector_model: Anzhc Head+Hair seg y8m.pt
+    yolo_classes: ''
     use_sam: false
-    auto_prompt_injection: true
-    gender_filter: All
-    ignore_edge_touching: false
-    anatomy_check: true
-    auto_rotate: true
-    color_fix: None
-    use_hires_fix: false
     pos_prompt: '(masterpiece), (best quality), (high resolution), (photorealistic),
       <lora:orgasm face_v2:1.2>, orgasm face, female orgasm, orgasm, [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>],
       pale skin, (glossy skin:1.1), (half-closed eyes:1.2), (wide open mouth:1.7),
@@ -1817,77 +2058,132 @@ ui_settings:
     neg_prompt: (worst quality, low quality, normal quality, lowres, bokeh, blur:2.0),
       (polydactyly, polydactylism:2.0), pornpics-com style watermark, jpeg artifacts,
       ugly teeth, wrong teeth
-    max_det: 0
-    sort_method: 신뢰도
-    use_controlnet: false
-    control_model: None
-    control_module: None
-    sep_noise: false
+    auto_prompt_injection: true
+    gender_filter: All
+    ignore_edge_touching: false
+    anatomy_check: true
+    use_pose_rotation: false
+    max_det: 20
     inpaint_width: 512
     inpaint_height: 512
+    mask_merge_mode: None
     use_noise_mask: false
-    mask_merge_mode: false
+    auto_rotate: true
+    color_fix: None
+    control_model: None
+    control_module: None
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    bmab_enabled: true
+    resize_enable: false
+    resize_align: Center
+    sort_method: 신뢰도
     sep_ckpt: true
     sep_ckpt_name: henmix_real_v6b-fp16-no-ema.safetensors
     sep_vae: true
     sep_vae_name: vae-ft-mse-840000-ema-pruned.ckpt.vae.pt
     sep_sampler: true
-    sampler_name: Euler a Karras
+    sampler_name: DPM++ 2M Karras
     sep_steps: true
     steps: 24
     sep_cfg: true
     cfg_scale: 7.0
     sep_clip: true
     clip_skip: 2
-    restore_face: false
+    restore_face: true
+    use_hires_fix: true
+    sep_noise: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
     max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
     x_offset: 0
     y_offset: 0
-    control_weight: 1.0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
+    denoising_strength: 0.4
+    context_expand_factor: 1.5
+    crop_padding: 32
+    control_weight: 0.5
     guidance_start: 0.0
     guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_temp: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
     seed: -1
   패스 13:
     enabled: false
-    detector_model: adetailerAfterDetailer_v10.pt
+    detector_model: deepfashion2_yolov8s-seg.pt
+    yolo_classes: ''
     use_sam: false
+    pos_prompt: '(large breasts:1.1),(highly detailed skin texture:1.2), (photorealistic:1.3),bare
+      skin(1.4), anatomic correct, smooth skin, masterpiece, 8k uhd, soft lighting[SEP]
+
+      1girl, super model body, completely nude,(large breasts:1.1), [SEP]'
+    neg_prompt: Stable_Yogis_PDXL_Negatives-neg, score 6, score 5, score 4,(clothes:1.5),
+      (bra:1.5), (underwear:1.5), (shirt:1.5), (bikini:1.5), distorted body, extra
+      limbs, bad anatomy, deformed iris, blurry
     auto_prompt_injection: true
     gender_filter: All
     ignore_edge_touching: false
     anatomy_check: true
-    auto_rotate: true
-    color_fix: None
-    use_hires_fix: false
-    pos_prompt: ''
-    neg_prompt: ''
-    max_det: 20
-    sort_method: 신뢰도
-    use_controlnet: false
-    control_model: None
-    control_module: inpaint_global_harmonious
-    sep_noise: false
+    use_pose_rotation: false
+    max_det: 1
     inpaint_width: 1024
     inpaint_height: 1024
+    mask_merge_mode: None
     use_noise_mask: false
-    mask_merge_mode: false
+    auto_rotate: false
+    color_fix: Adain
+    mask_content: latent_noise
+    inpaint_full_res: false
+    use_soft_inpainting: false
+    control_model: None
+    control_module: None
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    hires_upscaler: None
+    bmab_enabled: true
+    resize_enable: false
+    resize_align: Center
+    bmab_landscape_detail: false
+    bmab_edge_enabled: false
+    sort_method: 신뢰도
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
     sep_vae_name: Use Global
     sep_sampler: false
-    sampler_name: Euler a Karras
+    sampler_name: Euler a Automatic
     sep_steps: false
     steps: 20
     sep_cfg: false
@@ -1895,54 +2191,92 @@ ui_settings:
     sep_clip: false
     clip_skip: 2
     restore_face: false
-    conf_thresh: 0.35
+    use_hires_fix: false
+    sep_noise: false
+    conf_thresh: 0.04
     min_face_ratio: 0.01
     max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
+    mask_dilation: 12
+    mask_erosion: 0
+    mask_blur: 24
+    x_offset: 0
+    y_offset: 0
     sam_points_per_side: 32
     sam_pred_iou_thresh: 0.88
     sam_stability_score_thresh: 0.95
-    mask_dilation: 4
-    mask_erosion: 0
-    mask_blur: 12
-    x_offset: 0
-    y_offset: 0
-    control_weight: 1.0
+    denoising_strength: 0.66
+    context_expand_factor: 1.2
+    crop_padding: 10
+    soft_schedule_bias: 1.0
+    soft_preservation_strength: 0.5
+    soft_transition_contrast: 4.0
+    soft_mask_influence: 0.0
+    soft_diff_threshold: 0.5
+    soft_diff_contrast: 2.0
+    control_weight: 0.5
     guidance_start: 0.0
     guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_saturation: 1.0
+    bmab_color_temperature: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_noise_alpha_final: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
+    hires_upscale_factor: 1.5
+    hires_steps: 14
+    hires_denoise: 0.5
+    hires_width: 0
+    hires_height: 0
+    hires_cfg: 5.0
     seed: -1
   패스 14:
     enabled: false
-    detector_model: adetailerAfterDetailer_v10.pt
+    detector_model: sam3.pt
+    yolo_classes: ''
     use_sam: false
+    pos_prompt: ''
+    neg_prompt: ''
     auto_prompt_injection: true
     gender_filter: All
     ignore_edge_touching: false
     anatomy_check: true
+    use_pose_rotation: false
+    max_det: 20
+    inpaint_width: 512
+    inpaint_height: 512
+    mask_merge_mode: None
+    use_noise_mask: false
     auto_rotate: true
     color_fix: None
-    use_hires_fix: false
-    pos_prompt: ''
-    neg_prompt: ''
-    max_det: 20
-    sort_method: 신뢰도
-    use_controlnet: false
     control_model: None
-    control_module: inpaint_global_harmonious
-    sep_noise: false
-    inpaint_width: 1024
-    inpaint_height: 1024
-    use_noise_mask: false
-    mask_merge_mode: false
+    control_module: None
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    bmab_enabled: true
+    resize_enable: false
+    resize_align: Center
+    sort_method: 신뢰도
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
     sep_vae_name: Use Global
     sep_sampler: false
-    sampler_name: Euler a Karras
+    sampler_name: Euler a Automatic
     sep_steps: false
     steps: 20
     sep_cfg: false
@@ -1950,54 +2284,78 @@ ui_settings:
     sep_clip: false
     clip_skip: 2
     restore_face: false
+    use_hires_fix: false
+    sep_noise: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
     max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
     x_offset: 0
     y_offset: 0
-    control_weight: 1.0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
+    denoising_strength: 0.4
+    context_expand_factor: 1.5
+    crop_padding: 32
+    control_weight: 0.5
     guidance_start: 0.0
     guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_temp: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
     seed: -1
   패스 15:
     enabled: false
-    detector_model: adetailerAfterDetailer_v10.pt
+    detector_model: sam3.pt
+    yolo_classes: ''
     use_sam: false
+    pos_prompt: ''
+    neg_prompt: ''
     auto_prompt_injection: true
     gender_filter: All
     ignore_edge_touching: false
     anatomy_check: true
+    use_pose_rotation: false
+    max_det: 20
+    inpaint_width: 512
+    inpaint_height: 512
+    mask_merge_mode: None
+    use_noise_mask: false
     auto_rotate: true
     color_fix: None
-    use_hires_fix: false
-    pos_prompt: ''
-    neg_prompt: ''
-    max_det: 20
-    sort_method: 신뢰도
-    use_controlnet: false
     control_model: None
-    control_module: inpaint_global_harmonious
-    sep_noise: false
-    inpaint_width: 1024
-    inpaint_height: 1024
-    use_noise_mask: false
-    mask_merge_mode: false
+    control_module: None
+    dd_enabled: false
+    dd_amount: 0.1
+    dd_start: 0.2
+    dd_end: 0.8
+    dd_start_offset: 0.0
+    dd_end_offset: 0.0
+    dd_bias: 0.5
+    dd_exponent: 1.0
+    dd_fade: 0.0
+    dd_smooth: true
+    dd_mode: both
+    dd_hires: false
+    bmab_enabled: true
+    resize_enable: false
+    resize_align: Center
+    sort_method: 신뢰도
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
     sep_vae_name: Use Global
     sep_sampler: false
-    sampler_name: Euler a Karras
+    sampler_name: Euler a Automatic
     sep_steps: false
     steps: 20
     sep_cfg: false
@@ -2005,22 +2363,32 @@ ui_settings:
     sep_clip: false
     clip_skip: 2
     restore_face: false
+    use_hires_fix: false
+    sep_noise: false
     conf_thresh: 0.35
     min_face_ratio: 0.01
     max_face_ratio: 1.0
-    denoising_strength: 0.4
-    crop_padding: 32
-    sam_points_per_side: 32
-    sam_pred_iou_thresh: 0.88
-    sam_stability_score_thresh: 0.95
     mask_dilation: 4
     mask_erosion: 0
     mask_blur: 12
     x_offset: 0
     y_offset: 0
-    control_weight: 1.0
+    sam_points_per_side: 32
+    sam_pred_iou_thresh: 0.88
+    sam_stability_score_thresh: 0.95
+    denoising_strength: 0.4
+    context_expand_factor: 1.5
+    crop_padding: 32
+    control_weight: 0.5
     guidance_start: 0.0
     guidance_end: 1.0
-    upscale_factor: 1.5
-    noise_multiplier: 1.0
+    bmab_contrast: 1.0
+    bmab_brightness: 1.0
+    bmab_sharpness: 1.0
+    bmab_color_temp: 0.0
+    bmab_noise_alpha: 0.0
+    bmab_edge_strength: 0.0
+    bmab_edge_low: 50
+    bmab_edge_high: 200
+    resize_ratio: 0.6
     seed: -1

@@ -25,6 +25,10 @@ def sort_boxes(boxes, scores, method, image_width, image_height):
         # x1 좌표 기준 오름차순 정렬
         sort_idx = np.argsort(boxes[:, 0])
 
+    elif method == "위치(우에서 좌)": # [New]
+        # x1 좌표 기준 내림차순 정렬
+        sort_idx = np.argsort(boxes[:, 0])[::-1]
+
     elif method == "위치 (중앙에서 바깥)":
         # 박스 중심점 계산
         box_cx = (boxes[:, 0] + boxes[:, 2]) / 2
@@ -41,6 +45,10 @@ def sort_boxes(boxes, scores, method, image_width, image_height):
     elif method == "위치(위에서 아래)": # [New]
         # y1 좌표 기준 오름차순 정렬
         sort_idx = np.argsort(boxes[:, 1])
+
+    elif method == "위치(아래에서 위)": # [New]
+        # y1 좌표 기준 내림차순 정렬
+        sort_idx = np.argsort(boxes[:, 1])[::-1]
 
     elif method == "영역 (대형에서 소형)":
         # 면적 계산: (x2 - x1) * (y2 - y1)

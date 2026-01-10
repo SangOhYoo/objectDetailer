@@ -1,4 +1,7 @@
 # core/gpu_manager.py
+# [경고] 이 파일은 더 이상 사용되지 않습니다 (DEPRECATED).
+# 실제 활성 감지기(Detector) 구현은 'core/detector.py'에 있습니다.
+# 이 파일은 참고용으로만 유지되며, 메인 파이프라인에서 사용해서는 안 됩니다.
 
 import os
 import cv2

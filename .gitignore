@@ -43,3 +43,8 @@ htmlcov/
 gfpgan/weights/
 models/
 outputs/
+temp_*/
+debug_*
+*_debug.png
+*_test.png
+

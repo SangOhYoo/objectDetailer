@@ -4,18 +4,19 @@ from typing import Tuple, List, Optional
 
 class MaskUtils:
     @staticmethod
-    def refine_mask(mask: np.ndarray, dilation: int = 4, blur: int = 4) -> np.ndarray:
+    def refine_mask(mask: np.ndarray, dilation: int = 4, erosion: int = 0, blur: int = 4) -> np.ndarray:
         """
         [ADetailer Logic] 마스크 후가공 (Seam 제거 및 영역 조절)
-        1. Dilation/Erosion: 마스크 영역 확장(+) 또는 축소(-)
-        2. Gaussian Blur: 경계선을 부드럽게 하여 합성 시 이질감 제거
+        1. Dilation: 마스크 영역 확장 (+) 또는 축소 (-) (legacy support)
+        2. Erosion: 별도의 침식 (Closing 연산 등을 위함)
+        3. Gaussian Blur: 경계선을 부드럽게 하여 합성 시 이질감 제거
         """
         if mask is None:
             return None
             
         refined = mask.copy()
 
-        # 1. Dilation / Erosion
+        # 1. Dilation / Erosion (Legacy 'dilation' param can be negative)
         if dilation != 0:
             iterations = abs(dilation)
             # 3x3 사각형 커널 사용
@@ -26,7 +27,12 @@ class MaskUtils:
             else:
                 refined = cv2.erode(refined, kernel, iterations=iterations)
 
-        # 2. Gaussian Blur
+        # 2. Explicit Erosion (New, from slider)
+        if erosion > 0:
+            kernel = np.ones((3, 3), np.uint8)
+            refined = cv2.erode(refined, kernel, iterations=erosion)
+
+        # 3. Gaussian Blur
         if blur > 0:
             # 커널 크기는 반드시 홀수(odd)여야 함
             k_size = blur if blur % 2 == 1 else blur + 1

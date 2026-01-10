@@ -8,7 +8,7 @@ import multiprocessing as mp
 import time
 from queue import Empty
 import gc
-from PyQt6.QtCore import QThread, pyqtSignal, QObject
+from PyQt6.QtCore import pyqtSignal, QObject, QTimer
 
 # [Fix] GFPGAN(BasicSR)과 torchvision 0.17+ 호환성 패치
 import torchvision
@@ -31,6 +31,15 @@ def worker_process(device_id, input_queue, output_queue, configs):
     QThread가 아닌 multiprocessing.Process로 실행됨.
     """
     worker_id = device_id
+    
+    # [Fix] Force-clear CUDA_VISIBLE_DEVICES to ensure multiple GPUs are visible
+    # On Windows/Multiprocessing, sometimes this env var gets inherited or set implicitly to 0.
+    if "CUDA_VISIBLE_DEVICES" in os.environ:
+        del os.environ["CUDA_VISIBLE_DEVICES"]
+
+    # [Log] Immediate process startup check
+    print(f"[Process Start] Worker PID: {os.getpid()}, Req Device: {device_id}")
+
     try:
         # [MP] 프로세스 별로 ImageProcessor 초기화 (독립 메모리)
         # 로그는 큐를 통해 메인 프로세스로 전달
@@ -38,7 +47,7 @@ def worker_process(device_id, input_queue, output_queue, configs):
             output_queue.put(("log", f"[{worker_id}] {msg}"))
             
         def preview_wrapper(img):
-            # Numpy로 변환하여 전송 (Pickle 가능하도록)
+            # ... existing functionality ...
             if img is not None and not isinstance(img, np.ndarray):
                 try:
                     img = np.array(img)
@@ -48,8 +57,58 @@ def worker_process(device_id, input_queue, output_queue, configs):
                     pass
             output_queue.put(("preview", img))
 
+        log_wrapper(f"Worker Process Started (PID: {os.getpid()})")
+        
+        if "cuda" in device_id:
+            try:
+                # [Debug] Worker Process GPU Diagnostics
+                # Force torch to initialize CUDA to check actual visibility
+                if not torch.cuda.is_available():
+                     print(f"[Worker] torch.cuda.is_available() returned False inside worker {worker_id}")
+                     raise RuntimeError("CUDA not available in worker process")
+
+                local_device_count = torch.cuda.device_count()
+                req_idx = int(device_id.split(':')[1])
+                
+                print(f"[Worker {worker_id}] Diagnostic Start:")
+                print(f"  - PID: {os.getpid()}")
+                print(f"  - Device Count: {local_device_count}")
+                
+                # [Fix] Adaptive Device Selection
+                # If we see multiple GPUs, trust the requested index (e.g. cuda:1 -> cuda:1).
+                # If we see only 1 GPU (Isolation), map any request to cuda:0.
+                final_device_id = device_id
+                
+                if req_idx < local_device_count:
+                    final_device_id = f"cuda:{req_idx}"
+                elif local_device_count == 1:
+                    print(f"[Worker] Warning: Requested {device_id} but only 1 device visible. Mapping to cuda:0.")
+                    final_device_id = "cuda:0"
+                else:
+                    raise RuntimeError(f"Requested {device_id} but only {local_device_count} devices found.")
+                
+                device_id = final_device_id
+
+                # [Fix] Explicitly set device for this process context
+                torch.cuda.set_device(device_id)
+                current_dev = torch.cuda.current_device()
+                current_dev_name = torch.cuda.get_device_name(current_dev)
+                
+                msg = f"GPU Bound: {device_id} -> Actual: {current_dev} ({current_dev_name})"
+                print(f"[Worker] {msg}")
+                log_wrapper(msg) # Send to UI log as well
+
+                t = torch.tensor([1.0]).to(device_id)
+                del t
+                print(f"[Worker] GPU Check Passed for {device_id} (Originally: {worker_id})")
+            except Exception as e:
+                err_msg = f"Error: Device {device_id} is invalid ({e}). Falling back to CPU."
+                log_wrapper(err_msg)
+                print(f"[Worker Error] {err_msg}") # Print to terminal for visibility
+                device_id = "cpu"
+
         processor = ImageProcessor(device_id, log_callback=log_wrapper, preview_callback=preview_wrapper)
-        log_wrapper(f"Initialized on {device_id} (PID: {os.getpid()})")
+        log_wrapper(f"Initialized ImageProcessor on {device_id}")
 
         while True:
             try:
@@ -62,9 +121,14 @@ def worker_process(device_id, input_queue, output_queue, configs):
             if task is None: # 종료 시그널
                 break
                 
-            fpath = task
+            # [Fix] Handle (path, angle) or path
+            if isinstance(task, tuple):
+                fpath, angle = task
+            else:
+                fpath, angle = task, 0
+                
             output_queue.put(("started", os.path.basename(fpath)))
-            log_wrapper(f"Processing: {os.path.basename(fpath)}")
+            log_wrapper(f"Processing: {os.path.basename(fpath)} (Rot: {angle})")
             
             try:
                 # 이미지 로드
@@ -76,24 +140,40 @@ def worker_process(device_id, input_queue, output_queue, configs):
                     output_queue.put(("result", (fpath, None)))
                     continue
                 
+                # [New] Apply Input Rotation (Pre-Process)
+                if angle != 0:
+                    if angle == 90 or angle == -270:
+                        img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+                    elif angle == 180 or angle == -180:
+                        img = cv2.rotate(img, cv2.ROTATE_180)
+                    elif angle == 270 or angle == -90:
+                        img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
                 # 프리뷰 전송
                 preview_wrapper(img)
                 
                 # 처리 실행
                 result_img = processor.process(img, configs)
                 
+                # [New] Apply Output Inverse Rotation (Restore Original Angle)
+                # Only if result exists and matches dimensions (or just force rotate)
+                if angle != 0 and result_img is not None:
+                     # Inverse
+                     # 90 (CW) -> -90 (CCW)
+                     if angle == 90 or angle == -270:
+                         result_img = cv2.rotate(result_img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                     elif angle == 180 or angle == -180:
+                         result_img = cv2.rotate(result_img, cv2.ROTATE_180)
+                     elif angle == 270 or angle == -90:
+                         result_img = cv2.rotate(result_img, cv2.ROTATE_90_CLOCKWISE)
+
                 # 결과 저장 로직 (프로세스 내부에서 저장까지 완료)
                 # Config가 Pickling되어 넘어왔으므로 여기서 cfg 인스턴스 접근 시 주의 필요
                 # 하지만 save_image_with_metadata는 경로만 알면 됨. output_path는 다시 읽거나 전달받아야 함.
                 # 편의상 cfg를 여기서 다시 로드하거나 safe한 경로 사용
                 # 여기서는 메인 프로세스에서 전달된 configs를 사용
                 
-                # NOTE: cfg.get()은 파일에서 읽는 것이므로 MP에서도 동작할 수 있으나, 
-                # 동기화 문제가 있을 수 있으니 저장 로직을 간소화
-                
                 output_dir = "outputs" # Default
-                # cfg 인스턴스는 각 프로세스에서 독립적이므로 다시 로드하지 않으면 기본값일 수 있음.
-                # 하지만 workers.py import 시점에 초기화되므로 config.yaml을 읽었을 것임.
                 if cfg.get('system', 'output_path'):
                     output_dir = cfg.get('system', 'output_path')
                 
@@ -102,9 +182,8 @@ def worker_process(device_id, input_queue, output_queue, configs):
                 filename = os.path.basename(fpath)
                 save_path = os.path.join(output_dir, filename)
                 
-                # [Optimization] 비동기 저장 (Async Save)
-                # 디스크 쓰기(I/O)가 GPU 추론을 막지 않도록 별도 스레드풀에서 처리
-                # Config Wrapper 함수 정의 (Pickle 문제 방지 위해 내부 정의 대신 Top-level 선호하지만 여기선 closure 사용 안함)
+                # [Modified] Sync Save (No threading)
+                # Removed ThreadPoolExecutor to ensure stability and process-only architecture.
                 
                 # 메타데이터 저장용 래퍼
                 active_conf = next((c for c in configs if c.get('enabled')), {})
@@ -112,28 +191,14 @@ def worker_process(device_id, input_queue, output_queue, configs):
                     def __init__(self, d): self.d = d
                     def to_adetailer_json(self): return self.d
                 
-                # 저장 함수 (별도 스레드에서 실행)
-                def save_task(img_to_save, src_path, dst_path, conf_wrapper):
-                    try:
-                        if not save_image_with_metadata(img_to_save, src_path, dst_path, conf_wrapper):
-                            # 메인 큐에 로그를 보낼 수 없으므로(Process Queue는 피클링 필요), 
-                            # 여기서 에러가 나면 콘솔에만 찍거나 무시해야 함. 
-                            # 하지만 log_wrapper는 메인 루프 변수라 접근 불가.
-                            # 해결책: save_task에 log_queue도 전달하거나, 그냥 에러만 출력.
-                            print(f"[AsyncSave] Warning: Failed to save {os.path.basename(src_path)}")
-                    except Exception as e:
-                        print(f"[AsyncSave] Error saving {os.path.basename(src_path)}: {e}")
+                try:
+                    save_success = save_image_with_metadata(result_img, fpath, save_path, ConfigWrapper(active_conf))
+                    if not save_success:
+                        log_wrapper(f"Warning: Failed to save metadata for {filename}")
+                except Exception as e:
+                    log_wrapper(f"Error saving {filename}: {e}")
 
-                # 스레드풀이 없으면 생성 (Process 당 1개)
-                if not hasattr(worker_process, "executor"):
-                     from concurrent.futures import ThreadPoolExecutor
-                     worker_process.executor = ThreadPoolExecutor(max_workers=1)
-
-                worker_process.executor.submit(save_task, result_img, fpath, save_path, ConfigWrapper(active_conf))
-
-                # 결과 이미지(Numpy)를 큐로 전송하면 비용이 큼. 
-                # 메인 UI 표시용으로는 썸네일이나 경로만 줘도 되지만, 
-                # 현재 구조상 이미지를 통째로 넘겨야 비교 뷰어가 갱신됨.
+                # 결과 이미지(Numpy) 전송
                 output_queue.put(("result", (fpath, result_img)))
 
             except Exception as e:
@@ -141,63 +206,13 @@ def worker_process(device_id, input_queue, output_queue, configs):
                 traceback.print_exc()
                 output_queue.put(("result", (fpath, None)))
             finally:
-                # 메모리 정리
-                gc.collect()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+                # [Optimized] 불필요한 매 루프마다의 GC/EmptyCache 제거 (속도 향상)
+                # PyTorch 캐시 얼로케이터를 활용하여 재할당 오버헤드 감소
+                pass
 
     except Exception as e:
         print(f"Worker Process Died: {e}")
         traceback.print_exc()
-
-class ResultListener(QThread):
-    """
-    멀티프로세싱 큐(Output Queue)를 모니터링하여 메인 스레드에 시그널을 보내는 리스너.
-    """
-    log_signal = pyqtSignal(str)
-    preview_signal = pyqtSignal(np.ndarray)
-    file_started_signal = pyqtSignal(str)
-    result_signal = pyqtSignal(str, object)
-    finished_signal = pyqtSignal()
-    progress_signal = pyqtSignal(int, int) # (processed, total)
-
-    def __init__(self, output_queue, total_files):
-        super().__init__()
-        self.output_queue = output_queue
-        self.total_files = total_files
-        self.processed_count = 0
-        self.is_running = True
-
-    def run(self):
-        while self.is_running:
-            try:
-                # 0.1초 대기하며 폴링 (UI 블로킹 방지)
-                msg_type, data = self.output_queue.get(timeout=0.1)
-                
-                if msg_type == "log":
-                    self.log_signal.emit(data)
-                elif msg_type == "preview":
-                    self.preview_signal.emit(data)
-                elif msg_type == "started":
-                    self.file_started_signal.emit(data)
-                elif msg_type == "result":
-                    path, img = data
-                    self.processed_count += 1
-                    self.progress_signal.emit(self.processed_count, self.total_files)
-                    self.result_signal.emit(path, img)
-                    
-                    if self.processed_count >= self.total_files:
-                        self.finished_signal.emit()
-                        # 모든 작업 완료 시 루프 종료 (하지만 큐에 남은 메시지가 있을 수 있으므로 continue)
-                        # 여기서는 종료하지 않고 계속 리슨하다가 컨트롤러가 종료시킴
-            except Empty:
-                continue
-            except Exception as e:
-                print(f"Listener Error: {e}")
-                break
-
-    def stop(self):
-        self.is_running = False
 
 class ProcessingController(QObject):
     log_signal = pyqtSignal(str)
@@ -214,7 +229,12 @@ class ProcessingController(QObject):
         self.processes = []
         self.input_queue = mp.Queue()
         self.output_queue = mp.Queue()
-        self.listener = None
+        
+        # [New] QTimer for polling instead of QThread
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.check_queue)
+        self.total_files = len(file_paths)
+        self.processed_count = 0
 
     def start_processing(self):
         # 작업 큐 채우기
@@ -224,19 +244,15 @@ class ProcessingController(QObject):
         if torch.cuda.is_available():
             gpu_count = torch.cuda.device_count()
             self.log_signal.emit(f"[System] Detected {gpu_count} NVIDIA GPUs. Starting Multiprocessing...")
+            for i in range(gpu_count):
+                try:
+                    name = torch.cuda.get_device_name(i)
+                    self.log_signal.emit(f"  - GPU {i}: {name}")
+                except:
+                    self.log_signal.emit(f"  - GPU {i}: Unknown Device")
         else:
             gpu_count = 1
             self.log_signal.emit("[System] No GPU detected. Using CPU via Multiprocessing.")
-
-        # 리스너 시작
-        self.listener = ResultListener(self.output_queue, len(self.file_paths))
-        self.listener.log_signal.connect(self.log_signal.emit)
-        self.listener.preview_signal.connect(self.preview_signal.emit)
-        self.listener.file_started_signal.connect(self.file_started_signal.emit)
-        self.listener.result_signal.connect(self.result_signal.emit) # handle_result to main window
-        self.listener.progress_signal.connect(self.progress_signal.emit)
-        self.listener.finished_signal.connect(self.finished_signal.emit)
-        self.listener.start()
 
         # 워커 프로세스 시작
         for i in range(gpu_count):
@@ -249,9 +265,49 @@ class ProcessingController(QObject):
             p.start()
             self.processes.append(p)
             self.log_signal.emit(f"[Manager] Started Worker Process {i} (PID: {p.pid}) on {dev_id}")
+            
+        # Start Polling Timer (Time interval 50ms)
+        self.timer.start(50)
+
+    def check_queue(self):
+        """
+        Polls the output queue for messages from worker processes.
+        Runs on the Main Thread via QTimer.
+        """
+        # Process multiple messages per tick to prevent backlog
+        # But limit to avoid freezing UI if flooded
+        for _ in range(20): 
+            try:
+                # Non-blocking get
+                msg_type, data = self.output_queue.get_nowait()
+                
+                if msg_type == "log":
+                    self.log_signal.emit(data)
+                elif msg_type == "preview":
+                    self.preview_signal.emit(data)
+                elif msg_type == "started":
+                    self.file_started_signal.emit(data)
+                elif msg_type == "result":
+                    path, img = data
+                    self.processed_count += 1
+                    self.progress_signal.emit(self.processed_count, self.total_files)
+                    self.result_signal.emit(path, img)
+                    
+                    if self.processed_count >= self.total_files:
+                        self.stop() # Auto stop when done
+                        self.finished_signal.emit()
+                        return
+                        
+            except Empty:
+                break
+            except Exception as e:
+                print(f"Queue Polling Error: {e}")
+                break
 
     def stop(self):
         """모든 프로세스 강제 종료"""
+        self.timer.stop() # Stop polling
+        
         self.log_signal.emit("[Manager] Terminating all processes...")
         
         # 워커 프로세스 종료
@@ -260,14 +316,8 @@ class ProcessingController(QObject):
                 p.terminate()
                 p.join(timeout=1.0)
         self.processes.clear()
-        
-        # 리스너 종료
-        if self.listener:
-            self.listener.stop()
-            self.listener.wait()
-            self.listener = None
             
-        # 큐 정리 (선택적)
+        # 큐 정리
         while not self.input_queue.empty():
             try: self.input_queue.get_nowait()
             except: break

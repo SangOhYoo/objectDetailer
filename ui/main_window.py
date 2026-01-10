@@ -21,6 +21,7 @@ class MainWindow(QMainWindow):
         self.resize(1600, 1000) # 기본 사이즈 (HD+)
         
         self.controller = None
+        self.preview_processor = None # [New] For quick detection preview
         
         self.init_ui()
         self.apply_light_theme() # 기본 테마
@@ -132,12 +133,19 @@ class MainWindow(QMainWindow):
         for i in range(1, max_passes + 1): 
             # 페이지 생성
             tab = AdetailerUnitWidget(unit_name=f"패스 {i}")
+            # [New] Connect Preview Signal
+            tab.preview_requested.connect(self.on_detect_preview_requested)
+            
             self.unit_widgets.append(tab)
             self.tabs.addTab(tab, f"패스 {i}")
         
         left_layout.addWidget(self.tabs)
         
         left_panel.setMinimumWidth(400) # 최소 너비 확보 (40% 비율 유연성)
+
+        # [UI Fix] Initial Splitter Ratio (Left:Right = 700:Rest)
+        # Prevents horizontal scrollbar on startup (Increased from 550)
+        self.splitter.setSizes([700, 900])
 
         # ============================================================
         # [Right Panel] Preview & Logs
@@ -159,6 +167,8 @@ class MainWindow(QMainWindow):
         self.file_queue = FileQueueWidget()
         self.file_queue.setMinimumHeight(200)
         self.file_queue.file_clicked.connect(self.on_file_clicked)
+        # [New] Connect Rotation Signal
+        self.file_queue.file_rotated.connect(lambda p, a: self.on_file_clicked(p))
 
         # 4. Log
         self.log_text = QTextEdit()
@@ -169,13 +179,13 @@ class MainWindow(QMainWindow):
         btn_layout = QHBoxLayout()
         self.btn_load = QPushButton("📁 이미지 불러오기")
         self.btn_load.clicked.connect(self.load_image_dialog)
-        self.btn_load.setMinimumHeight(40)
+        self.btn_load.setFixedHeight(45)
         
         self.btn_run = QPushButton("🚀 일괄 실행 (Run Batch)")
         self.btn_run.clicked.connect(self.start_processing)
-        self.btn_run.setMinimumHeight(40)
+        self.btn_run.setFixedHeight(45)
         self.btn_run.setStyleSheet("""
-            QPushButton { background-color: #27ae60; color: white; font-weight: bold; font-size: 11pt; border-radius: 4px; }
+            QPushButton { background-color: #27ae60; color: white; font-weight: bold; border-radius: 4px; }
             QPushButton:hover { background-color: #2ecc71; }
             QPushButton:pressed { background-color: #219150; }
             QPushButton:disabled { background-color: #95a5a6; color: #bdc3c7; }
@@ -183,14 +193,22 @@ class MainWindow(QMainWindow):
         
         self.btn_stop = QPushButton("⏹ 중지")
         self.btn_stop.clicked.connect(self.stop_processing)
-        self.btn_stop.setMinimumHeight(40)
+        self.btn_stop.setFixedHeight(45)
         
         btn_layout.addWidget(self.btn_load)
         btn_layout.addWidget(self.btn_run)
         btn_layout.addWidget(self.btn_stop)
 
-        right_layout.addWidget(self.sub_view, 1)
-        right_layout.addWidget(self.compare_view, 2)
+        # [New] Splitter for Preview and Compare
+        # [New] Splitter for Preview and Compare
+        self.right_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.right_splitter.addWidget(self.sub_view)
+        self.right_splitter.addWidget(self.compare_view)
+        # [Adjust] Use setSizes instead of stretch factor for manual control
+        # Example: [Preview Height, Compare Height] in pixels
+        self.right_splitter.setSizes([400, 500]) 
+
+        right_layout.addWidget(self.right_splitter, 3)
         right_layout.addWidget(self.file_queue, 1)
         right_layout.addWidget(self.log_text, 0)
         right_layout.addLayout(btn_layout)
@@ -198,11 +216,11 @@ class MainWindow(QMainWindow):
         # Add to Splitter
         self.splitter.addWidget(left_panel)
         self.splitter.addWidget(right_panel)
-        self.splitter.setStretchFactor(0, 4)
-        self.splitter.setStretchFactor(1, 6)
+        # self.splitter.setStretchFactor(0, 4) # Deprecated in favor of setSizes
+        # self.splitter.setStretchFactor(1, 6)
         
-        # [Fix] 좌측 패널 30% 축소 요청 (1600px 기준 480:1120)
-        self.splitter.setSizes([480, 1120])
+        # [Adjust] Increase left panel width to 1020px (User Request to fix scrollbar)
+        self.splitter.setSizes([1020, 580])
 
         # Progress Bar in Status Bar
         self.progress_bar = QProgressBar()
@@ -344,7 +362,12 @@ class MainWindow(QMainWindow):
         self.btn_stop.setStyleSheet("background-color: #c0392b; color: white;")
         self.sub_view.set_theme("dark")
         self.compare_view.set_theme("dark")
+        self.compare_view.set_theme("dark")
         self.file_queue.set_theme("dark")
+        
+        # [New] Apply theme to all tabs (for Graph)
+        for tab in self.unit_widgets:
+            tab.set_theme("dark")
 
     def apply_light_theme(self):
         light_style = """
@@ -401,7 +424,12 @@ class MainWindow(QMainWindow):
         self.btn_stop.setStyleSheet("background-color: #d32f2f; color: white;")
         self.sub_view.set_theme("light")
         self.compare_view.set_theme("light")
+        self.compare_view.set_theme("light")
         self.file_queue.set_theme("light")
+
+        # [New] Apply theme to all tabs (for Graph)
+        for tab in self.unit_widgets:
+            tab.set_theme("light")
 
     def log(self, message):
         self.log_text.append(message)
@@ -422,6 +450,16 @@ class MainWindow(QMainWindow):
             numpyarray = np.asarray(bytes, dtype=np.uint8)
             img_before = cv2.imdecode(numpyarray, cv2.IMREAD_COLOR)
             
+            # [New] Apply Rotation
+            angle = self.file_queue.get_rotation(file_path)
+            if angle != 0 and img_before is not None:
+                if angle == 90 or angle == -270:
+                    img_before = cv2.rotate(img_before, cv2.ROTATE_90_CLOCKWISE)
+                elif angle == 180 or angle == -180:
+                    img_before = cv2.rotate(img_before, cv2.ROTATE_180)
+                elif angle == 270 or angle == -90:
+                    img_before = cv2.rotate(img_before, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
             if img_before is not None:
                 # [Fix] 결과물이 존재하면 로드하여 After 이미지로 설정 (슬라이더 작동 보장)
                 output_dir = cfg.get('system', 'output_path') or "outputs"
@@ -458,8 +496,9 @@ class MainWindow(QMainWindow):
         self.btn_stop.setStyleSheet("background-color: #d32f2f; color: white;" if not enabled else "background-color: #cccccc; color: #666666;")
 
     def start_processing(self):
-        files = self.file_queue.get_all_files()
-        if not files:
+        # [Fix] Get tasks with rotation info
+        tasks = self.file_queue.get_all_tasks() # [(path, angle), ...]
+        if not tasks:
             self.log("No files to process.")
             return
 
@@ -490,7 +529,7 @@ class MainWindow(QMainWindow):
         self.set_ui_enabled(False)
 
         self.log("Starting batch processing...")
-        self.controller = ProcessingController(files, configs)
+        self.controller = ProcessingController(tasks, configs)
         self.controller.log_signal.connect(self.log)
         self.controller.progress_signal.connect(self.update_progress)
         self.controller.file_started_signal.connect(self.update_status_filename)
@@ -512,8 +551,24 @@ class MainWindow(QMainWindow):
             bytes = bytearray(stream.read())
             numpyarray = np.asarray(bytes, dtype=np.uint8)
             img_before = cv2.imdecode(numpyarray, cv2.IMREAD_COLOR)
+            
+            # [New] Apply Rotation for Display
+            angle = self.file_queue.get_rotation(path)
+            if angle != 0:
+                # Rotate function
+                def rotate_img(img, a):
+                    if img is None: return None
+                    if a == 90 or a == -270: return cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+                    elif a == 180 or a == -180: return cv2.rotate(img, cv2.ROTATE_180)
+                    elif a == 270 or a == -90: return cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                    return img
+                
+                img_before = rotate_img(img_before, angle)
+                result_img = rotate_img(result_img, angle) # result_img is likely restored to original, so rotate it back for view
+            
             self.compare_view.set_images(img_before, result_img)
         except:
+            # Fallback if load fails
             self.compare_view.pixmap_after = self.compare_view._np2pix(result_img)
             self.compare_view.update()
             
@@ -546,6 +601,77 @@ class MainWindow(QMainWindow):
         """글로벌 모델 변경 시 각 탭에 알림 (UI 동적 업데이트)"""
         for tab in self.unit_widgets:
             tab.on_global_model_changed(text)
+
+    def on_detect_preview_requested(self, config):
+        """[New] 탭에서 탐지 미리보기 요청 시 처리"""
+        # 1. Get Selected Image
+        # Assuming FileQueueWidget has a way to get selected or we use the last loaded/viewed.
+        # MainWindow doesn't track 'selected' explicitly, but compare_view usually shows it.
+        # But we need the filepath to load raw image.
+        
+        # Try to get from queue (need to check if FileQueueWidget exposes selection)
+        # Let's rely on self.last_clicked_path if stored, or ask queue.
+        # Actually FileQueueWidget is simple. Let's assume user clicked an image and it's visible.
+        # But for accurate testing, we should get the CURRENTLY SELECTED item in the list.
+        
+        # Access ListWidget directly?
+        items = self.file_queue.list_widget.selectedItems()
+        if not items:
+            QMessageBox.warning(self, "이미지 없음", "탐지할 이미지를 목록에서 선택해 주세요.")
+            return
+            
+        file_path = items[0].data(Qt.ItemDataRole.UserRole) # Assuming path stored in UserRole or just use tool tip / text
+        # FileQueueWidget._add_item stores path in UserRole? Let's check or assume text is filename?
+        # Actually FileQueueWidget usually stores path.
+        # Let's try to infer from text if UserRole fails, but usually we just store path.
+        # Wait, I don't see FileQueueWidget impl here. 
+        # But commonly we store full path.
+        if not file_path: 
+            # Fallback: file_path stored in item text? or UserRole.
+            # Let's assume UserRole is used. If None, try config.system.output... No.
+            # Re-read ui/main_window.py to see how on_file_clicked gets path.
+            pass
+
+        # 2. Lazy Init Processor
+        if self.preview_processor is None:
+            from core.pipeline import ImageProcessor
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.preview_processor = ImageProcessor(device=device, log_callback=self.log)
+            
+        # 3. Load Image
+        try:
+            stream = open(file_path.encode("utf-8"), "rb")
+            bytes = bytearray(stream.read())
+            numpyarray = np.asarray(bytes, dtype=np.uint8)
+            img = cv2.imdecode(numpyarray, cv2.IMREAD_COLOR)
+            
+            if img is None: raise Exception("Decode failed")
+            
+            # [New] Apply Rotation for Preview
+            angle = self.file_queue.get_rotation(file_path)
+            if angle != 0:
+                if angle == 90 or angle == -270:
+                    img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+                elif angle == 180 or angle == -180:
+                    img = cv2.rotate(img, cv2.ROTATE_180)
+                elif angle == 270 or angle == -90:
+                    img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"이미지 로드 실패: {e}")
+            return
+
+        # 4. Run Detection
+        self.set_ui_enabled(False) # Prevent other actions
+        try:
+            preview_img = self.preview_processor.detect_preview(img, config)
+            self.sub_view.set_image(preview_img)
+            self.log(f"[Preview] Detection finished for {os.path.basename(file_path)}")
+        except Exception as e:
+            self.log(f"[Error] Preview failed: {e}")
+            QMessageBox.critical(self, "Error", f"탐지 오류: {e}")
+        finally:
+            self.set_ui_enabled(True)
 
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication

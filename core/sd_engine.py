@@ -1,5 +1,6 @@
 """
 core/sd_engine.py
+[WARN] This file is DEPRECATED. The active model management is in 'core/model_manager.py'.
 Stable Diffusion 추론 엔진
 - SD 1.5 / SDXL 하이브리드 지원
 - ControlNet Tile 지원
@@ -16,7 +17,10 @@ from diffusers import (
     ControlNetModel,
     AutoencoderKL,
     EulerAncestralDiscreteScheduler,
-    DPMSolverMultistepScheduler
+    DPMSolverMultistepScheduler,
+    EulerDiscreteScheduler,
+    DDIMScheduler,
+    UniPCMultistepScheduler,
 )
 
 class SDEngine:
@@ -54,13 +58,46 @@ class SDEngine:
             safety_checker=None # 속도 향상
         )
         
-        # 스케줄러 설정 (DPM++ 2M Karras)
-        self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
-            self.pipe.scheduler.config, use_karras_sigmas=True, algorithm_type="dpmsolver++"
-        )
+        # 스케줄러 설정
+        # Config에서 sampler_name 가져오기 (없으면 기본값)
+        sampler_name = getattr(self.config, 'sampler_name', 'DPM++ 2M Karras')
+        self._set_scheduler(sampler_name)
         
         self.pipe.to(self.device)
         # 메모리 최적화
+    
+    def _set_scheduler(self, sampler_name):
+        """스케줄러 교체 로직"""
+        config = self.pipe.scheduler.config
+        
+        # [Map] User Name -> Scheduler Class & Args
+        if "DPM++ 2M" in sampler_name:
+            use_karras = "Karras" in sampler_name
+            # DPM++ 2M
+            self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+                config, algorithm_type="dpmsolver++", use_karras_sigmas=use_karras
+            )
+        elif "DPM++ SDE" in sampler_name:
+            use_karras = "Karras" in sampler_name
+            # DPM++ SDE (Multistep SDE variant)
+            self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+                config, algorithm_type="sde-dpmsolver++", use_karras_sigmas=use_karras
+            )
+        elif "Euler a" in sampler_name:
+            self.pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(config)
+        elif "Euler" in sampler_name: # Euler (Standard)
+            self.pipe.scheduler = EulerDiscreteScheduler.from_config(config)
+        elif "DDIM" in sampler_name:
+            self.pipe.scheduler = DDIMScheduler.from_config(config)
+        elif "UniPC" in sampler_name:
+            self.pipe.scheduler = UniPCMultistepScheduler.from_config(config)
+        else:
+             # Default fallback
+             self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+                config, algorithm_type="dpmsolver++", use_karras_sigmas=True
+            )
+             
+        print(f"[SDEngine] Scheduler set to: {sampler_name} -> {self.pipe.scheduler.__class__.__name__}")
         if hasattr(self.pipe, 'enable_xformers_memory_efficient_attention'):
             self.pipe.enable_xformers_memory_efficient_attention()
 

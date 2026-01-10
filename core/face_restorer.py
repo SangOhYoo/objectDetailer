@@ -3,6 +3,7 @@ import cv2
 import torch
 import numpy as np
 import sys
+import gc
 from core.config import config_instance as cfg
 
 # [Fix] torchvision 0.18+ 호환성 패치 (basicsr/gfpgan 에러 방지)
@@ -54,9 +55,16 @@ class FaceRestorer:
                 print(f"[FaceRestorer] 'gfpgan' library import failed: {e}\n[FaceRestorer] Skipping restoration.")
                 self.has_warned = True
             return False
-        except Exception as e:
             print(f"[FaceRestorer] Error loading GFPGAN: {e}")
             return False
+
+    def unload_model(self):
+        if self.gfpgan:
+            print("[FaceRestorer] Unloading GFPGAN...")
+            del self.gfpgan
+            self.gfpgan = None
+            gc.collect()
+            torch.cuda.empty_cache()
 
     def restore(self, image_bgr):
         """

@@ -10,6 +10,8 @@ import json
 import cv2
 import numpy as np
 from PIL import Image, PngImagePlugin, ImageOps
+import piexif
+import piexif.helper
 from core.io_utils import imwrite
 
 def load_image_as_pil(image_path):
@@ -45,30 +47,72 @@ def save_image_with_metadata(cv2_image, original_path, save_path, config):
         # config 객체에서 JSON 변환 메서드 호출
         ad_params = config.to_adetailer_json()
         
-        # 보기 좋은 텍스트 형태로 변환 (WebUI 스타일)
-        # 예: "Model: face_yolo, Confidence: 0.35, Denoise: 0.4 ..."
-        param_text = ", ".join([f"{k}: {v}" for k, v in ad_params.items()])
+        # 보기 좋은 텍스트 형태로 변환 (A1111 WebUI Style)
+        # Format:
+        # Positive Prompt
+        # Negative prompt: Negative Prompt
+        # Steps: 20, Sampler: ..., ...
+        
+        pos = ad_params.get("pos_prompt", "")
+        neg = ad_params.get("neg_prompt", "")
+        
+        # 제외할 키 (프롬프트는 별도 처리했으므로)
+        exclude_keys = ["pos_prompt", "neg_prompt"]
+        other_params = [f"{k}: {v}" for k, v in ad_params.items() if k not in exclude_keys]
+        
+        # Construct line by line
+        lines = []
+        if pos: lines.append(str(pos))
+        if neg: lines.append(f"Negative prompt: {neg}")
+        
+        # Others
+        if other_params:
+            lines.append(", ".join(other_params))
+            
+        param_text = "\n".join(lines)
         
         # 'parameters' 키에 저장 (표준 규격)
         metadata.add_text("parameters", param_text)
         metadata.add_text("Software", "SAM3_FaceDetailer_Ultimate")
         metadata.add_text("Comment", json.dumps(ad_params)) # 기계 분석용 JSON도 별도 저장
 
-        # 4. 원본 EXIF 이식 (선택 사항)
-        # 원본 사진을 다시 열어서 exif 정보를 가져옴
-        exif_bytes = None
+        # 4. 원본 EXIF 이식 및 갱신 (Key Step)
+        exif_bytes = b""
+        exif_dict = {"0th":{}, "Exif":{}, "GPS":{}, "1st":{}, "thumbnail":None}
+        
         try:
-            original_pil = Image.open(original_path)
-            exif_bytes = original_pil.info.get("exif")
-        except:
-            pass # 원본에 EXIF가 없으면 무시
+            if os.path.exists(original_path):
+                original_pil = Image.open(original_path)
+                raw_exif = original_pil.info.get("exif")
+                if raw_exif:
+                    try:
+                        exif_dict = piexif.load(raw_exif)
+                    except Exception as e:
+                        print(f"[Metadata] EXIF Parsing Failed: {e}. Creating new EXIF.")
+        except Exception as e:
+            print(f"[Metadata] Failed to load original EXIF: {e}")
 
-        # 5. 저장 실행
-        # exif 데이터가 있으면 같이 저장
-        if exif_bytes:
-            pil_image.save(save_path, pnginfo=metadata, exif=exif_bytes, quality=95)
-        else:
-            pil_image.save(save_path, pnginfo=metadata, quality=95)
+        # 5. EXIF Update (UserComment & Software)
+        try:
+            # Software (0x0131)
+            exif_dict["0th"][piexif.ImageIFD.Software] = "SAM3_FaceDetailer_Ultimate"
+            
+            # UserComment (0x9286) - ADetailer Params injection
+            # Make sure param_text is unicode
+            user_comment = piexif.helper.UserComment.dump(param_text, encoding="unicode")
+            exif_dict["Exif"][piexif.ExifIFD.UserComment] = user_comment
+            
+            # Dump back to bytes
+            exif_bytes = piexif.dump(exif_dict)
+            
+        except Exception as e:
+            print(f"[Metadata] Error constructing EXIF: {e}")
+            # Fallback: Just try to use original if possible, or empty
+            pass
+
+        # 6. 저장 실행
+        # pnginfo는 PNG용, exif는 JPEG/WebP용 (하지만 PIL은 포맷에 따라 무시함)
+        pil_image.save(save_path, pnginfo=metadata, exif=exif_bytes, quality=95)
             
         return True
 

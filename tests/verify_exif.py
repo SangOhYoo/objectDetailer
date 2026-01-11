@@ -1,0 +1,136 @@
+import os
+import numpy as np
+from PIL import Image
+import piexif
+import piexif.helper
+from core.metadata import save_image_with_metadata
+from unittest.mock import MagicMock
+
+def create_test_image(path):
+    # Create a 100x100 white image
+    img = Image.new("RGB", (100, 100), color="white")
+    
+    # Define EXIF data
+    # 0th IFD
+    zeroth_ifd = {
+        piexif.ImageIFD.Make: u"Test Camera",
+        piexif.ImageIFD.Model: u"Test Model",
+        piexif.ImageIFD.Copyright: u"Test User",
+        piexif.ImageIFD.Software: u"Original Software"
+    }
+    # Exif IFD
+    exif_ifd = {
+        piexif.ExifIFD.DateTimeOriginal: u"2023:01:01 00:00:00",
+        piexif.ExifIFD.UserComment: piexif.helper.UserComment.dump(u"Original Comment", encoding="unicode")
+    }
+    
+    exif_dict = {"0th": zeroth_ifd, "Exif": exif_ifd, "GPS": {}, "1st": {}, "thumbnail": None}
+    exif_bytes = piexif.dump(exif_dict)
+    
+    # Save with EXIF
+    img.save(path, exif=exif_bytes)
+    print(f"Created test image with EXIF: {path}")
+
+def verify_exif():
+    test_input = "test_input.jpg"
+    test_output = "test_output.png"
+    
+    try:
+        # 1. Create test image
+        create_test_image(test_input)
+        
+        # 2. Mock config
+        mock_config = MagicMock()
+        mock_config.to_adetailer_json.return_value = {
+            "pos_prompt": "verified face",
+            "neg_prompt": "blurry",
+            "steps": 25
+        }
+        
+        # 3. Dummy processed image (OpenCV BGR format)
+        cv2_image = np.zeros((100, 100, 3), dtype=np.uint8)
+        cv2_image[:] = (0, 255, 0) # Green square
+        
+        # 4. Call preservation logic
+        print("Running save_image_with_metadata...")
+        success = save_image_with_metadata(cv2_image, test_input, test_output, mock_config)
+        
+        if not success:
+            print("FAILED: save_image_with_metadata returned False")
+            return
+
+        # 5. Verify Output
+        print("Verifying output EXIF...")
+        out_img = Image.open(test_output)
+        out_info = out_img.info
+        
+        raw_exif = out_info.get("exif")
+        if not raw_exif:
+            print("FAILED: Output image has no EXIF data")
+            return
+            
+        exif_dict = piexif.load(raw_exif)
+        
+        # Check preserved tags
+        make = exif_dict["0th"].get(piexif.ImageIFD.Make)
+        model = exif_dict["0th"].get(piexif.ImageIFD.Model)
+        copyright_tag = exif_dict["0th"].get(piexif.ImageIFD.Copyright)
+        
+        # piexif returns bytes for string tags, decode them
+        def decode(val):
+            if isinstance(val, bytes):
+                return val.decode('utf-8').strip('\x00')
+            return val
+
+        print(f"Make: {decode(make)}")
+        print(f"Model: {decode(model)}")
+        print(f"Copyright: {decode(copyright_tag)}")
+        
+        assert decode(make) == "Test Camera", f"Make mismatch: {decode(make)}"
+        assert decode(model) == "Test Model", f"Model mismatch: {decode(model)}"
+        assert decode(copyright_tag) == "Test User", f"Copyright mismatch: {decode(copyright_tag)}"
+        
+        # Check updated tags
+        software = exif_dict["0th"].get(piexif.ImageIFD.Software)
+        print(f"Software: {decode(software)}")
+        assert decode(software) == "ObjectDetailer_Ultimate", f"Software mismatch: {decode(software)}"
+        
+        user_comment_bytes = exif_dict["Exif"].get(piexif.ExifIFD.UserComment)
+        user_comment = piexif.helper.UserComment.load(user_comment_bytes)
+        print(f"UserComment (full): {repr(user_comment)}")
+        
+        # Check substrings
+        has_prompt = "verified face" in user_comment
+        has_steps = "steps: 25" in user_comment
+        print(f"Has prompt: {has_prompt}")
+        print(f"Has steps: {has_steps}")
+        
+        assert has_prompt, f"UserComment missing prompt data. Got: {repr(user_comment)}"
+        assert has_steps, f"UserComment missing step data. Got: {repr(user_comment)}"
+        
+        # Check PNG Info (parameters)
+        params = out_info.get("parameters")
+        print(f"PNG parameters: {repr(params)}")
+        assert params is not None, "PNG Info 'parameters' missing"
+        if params is not None:
+             assert "verified face" in params, "PNG parameters missing prompt"
+        
+        print("\n[VERIFICATION] SUCCESS: All EXIF and Metadata checks passed!")
+        return True
+
+    except Exception as e:
+        print(f"\n[VERIFICATION] FAILED: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+    finally:
+        # Cleanup
+        if os.path.exists(test_input): os.remove(test_input)
+        if os.path.exists(test_output): os.remove(test_output)
+
+if __name__ == "__main__":
+    if verify_exif():
+        exit(0)
+    else:
+        exit(1)

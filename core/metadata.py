@@ -44,43 +44,27 @@ def save_image_with_metadata(cv2_image, original_path, save_path, config):
         metadata = PngImagePlugin.PngInfo()
         
         # 3. ADetailer 스타일의 파라미터 텍스트 생성
-        # config 객체에서 JSON 변환 메서드 호출
         ad_params = config.to_adetailer_json()
-        
-        # 보기 좋은 텍스트 형태로 변환 (A1111 WebUI Style)
-        # Format:
-        # Positive Prompt
-        # Negative prompt: Negative Prompt
-        # Steps: 20, Sampler: ..., ...
-        
         pos = ad_params.get("pos_prompt", "")
         neg = ad_params.get("neg_prompt", "")
         
-        # 제외할 키 (프롬프트는 별도 처리했으므로)
         exclude_keys = ["pos_prompt", "neg_prompt"]
-        other_params = [f"{k}: {v}" for k, v in ad_params.items() if k not in exclude_keys]
+        other_params = [f"ADetailer {k}: {v}" for k, v in ad_params.items() if k not in exclude_keys]
         
-        # Construct line by line
         lines = []
-        if pos: lines.append(str(pos))
-        if neg: lines.append(f"Negative prompt: {neg}")
-        
-        # Others
+        if pos: lines.append(f"ADetailer prompt: \"{pos}\"")
+        if neg: lines.append(f"ADetailer negative prompt: \"{neg}\"")
         if other_params:
             lines.append(", ".join(other_params))
             
-        param_text = "\n".join(lines)
+        added_param_text = "\n".join(lines)
         
-        # 'parameters' 키에 저장 (표준 규격)
-        metadata.add_text("parameters", param_text)
-        metadata.add_text("Software", "SAM3_FaceDetailer_Ultimate")
-        metadata.add_text("Comment", json.dumps(ad_params)) # 기계 분석용 JSON도 별도 저장
-
-        # 4. 원본 메타데이터/ICC 프로필 보존 (Robust Persistence)
+        # 4. 원본 메타데이터/ICC 프로필 보존 및 병합
         exif_bytes = b""
         icc_profile = None
+        final_param_text = added_param_text # 기본값
         
-        # EXIF 딕셔너리 기본값 (새로 만들 경우)
+        # EXIF 딕셔너리 기본값
         exif_dict = {"0th":{}, "Exif":{}, "GPS":{}, "1st":{}, "thumbnail":None}
         
         try:
@@ -90,43 +74,66 @@ def save_image_with_metadata(cv2_image, original_path, save_path, config):
                 # A. ICC Profile Preservation
                 icc_profile = original_pil.info.get("icc_profile")
                 
-                # B. PNG Info Preservation (Copy other chunks)
+                # B. PNG Info Merge (parameters)
+                existing_params = original_pil.info.get("parameters", "")
+                if existing_params:
+                    # 기존 내용 뒤에 새로운 파라미터를 덧붙임
+                    final_param_text = f"{existing_params}\n\n{added_param_text}"
+                
+                # C. Other PNG Chunks
                 for k, v in original_pil.info.items():
                     if k in ["exif", "parameters", "icc_profile"]: continue
                     if isinstance(k, str) and isinstance(v, str):
                         metadata.add_text(k, v)
 
-                # C. EXIF Preservation & Update
+                # D. EXIF Preservation & Update
                 raw_exif = original_pil.info.get("exif")
                 if raw_exif:
                     try:
                         exif_dict = piexif.load(raw_exif)
                         
-                        # Update Software & UserComment safely
-                        exif_dict["0th"][piexif.ImageIFD.Software] = "SAM3_FaceDetailer_Ultimate"
-                        user_comment = piexif.helper.UserComment.dump(param_text, encoding="unicode")
-                        exif_dict["Exif"][piexif.ExifIFD.UserComment] = user_comment
+                        # Update Software
+                        exif_dict["0th"][piexif.ImageIFD.Software] = "ObjectDetailer_Ultimate"
                         
-                        # Re-dump updated EXIF
+                        # UserComment Merge
+                        raw_comment = exif_dict["Exif"].get(piexif.ExifIFD.UserComment)
+                        existing_comment = ""
+                        if raw_comment:
+                            try:
+                                existing_comment = piexif.helper.UserComment.load(raw_comment)
+                            except: pass
+                        
+                        if existing_comment:
+                            merged_comment = f"{existing_comment}\n\n{added_param_text}"
+                        else:
+                            merged_comment = added_param_text
+                            
+                        exif_dict["Exif"][piexif.ExifIFD.UserComment] = piexif.helper.UserComment.dump(merged_comment, encoding="unicode")
                         exif_bytes = piexif.dump(exif_dict)
                         
                     except Exception as e:
-                        print(f"[Metadata] EXIF Parsing/Update Failed: {e}. Preserving original EXIF bytes.")
-                        exif_bytes = raw_exif # Fallback: 원본 바이트 그대로 사용
+                        print(f"[Metadata] EXIF Parsing/Update Failed: {e}. Falling back to overwrite.")
+                        exif_dict = {"0th":{}, "Exif":{}, "GPS":{}, "1st":{}, "thumbnail":None}
+                        exif_dict["0th"][piexif.ImageIFD.Software] = "ObjectDetailer_Ultimate"
+                        exif_dict["Exif"][piexif.ExifIFD.UserComment] = piexif.helper.UserComment.dump(added_param_text, encoding="unicode")
+                        exif_bytes = piexif.dump(exif_dict)
                 else:
-                    # 원본 EXIF가 없으면 새로 생성한 정보만 사용
-                    # Software (0x0131)
-                    exif_dict["0th"][piexif.ImageIFD.Software] = "SAM3_FaceDetailer_Ultimate"
-                    # UserComment (0x9286)
-                    user_comment = piexif.helper.UserComment.dump(param_text, encoding="unicode")
-                    exif_dict["Exif"][piexif.ExifIFD.UserComment] = user_comment
-                    
+                    # 원본 EXIF가 없으면 새로 생성
+                    exif_dict["0th"][piexif.ImageIFD.Software] = "ObjectDetailer_Ultimate"
+                    exif_dict["Exif"][piexif.ExifIFD.UserComment] = piexif.helper.UserComment.dump(added_param_text, encoding="unicode")
                     exif_bytes = piexif.dump(exif_dict)
 
         except Exception as e:
             print(f"[Metadata] Failed to process original metadata: {e}")
-            # Fallback happens naturally as bytes/dict are initialized
+            exif_dict["0th"][piexif.ImageIFD.Software] = "ObjectDetailer_Ultimate"
+            exif_dict["Exif"][piexif.ExifIFD.UserComment] = piexif.helper.UserComment.dump(added_param_text, encoding="unicode")
+            exif_bytes = piexif.dump(exif_dict)
 
+        # 5. PNG parameters 청크 최종 기록
+        metadata.add_text("parameters", final_param_text)
+        metadata.add_text("Software", "ObjectDetailer_Ultimate")
+        metadata.add_text("Comment", json.dumps(ad_params))
+        
         # 6. 저장 실행
         # pnginfo: PNG 텍스트 청크
         # exif: JPEG/PNG Exif 청크

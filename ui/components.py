@@ -12,6 +12,7 @@ from PyQt6.QtGui import (
     QImage, QPixmap, QIcon, QDragEnterEvent, QDropEvent,
     QPainter, QPen, QColor, QFont
 )
+from ui.styles import ModernTheme
 
 # =========================================================
 # 1. 기본 이미지 뷰어 (메인 뷰어 및 실시간 뷰어용)
@@ -82,9 +83,9 @@ class ImageCanvas(QLabel):
 
     def set_theme(self, mode):
         if mode == "dark":
-            self.setStyleSheet("background-color: #1e1e1e; border: 1px solid #444;")
+            self.setStyleSheet(f"background-color: {ModernTheme.DARK_BG_MAIN}; border: 1px solid {ModernTheme.DARK_BORDER};")
         else:
-            self.setStyleSheet("background-color: #f0f0f0; border: 1px solid #cccccc;")
+            self.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BG_MAIN}; border: 1px solid {ModernTheme.LIGHT_BORDER};")
 
 
 # =========================================================
@@ -216,10 +217,10 @@ class ComparisonViewer(QWidget):
 
     def set_theme(self, mode):
         if mode == "dark":
-            self.setStyleSheet("background-color: #222; border: 1px solid #444;")
+            self.setStyleSheet(f"background-color: {ModernTheme.DARK_BG_MAIN}; border: 1px solid {ModernTheme.DARK_BORDER};")
             self.text_color = Qt.GlobalColor.white
         else:
-            self.setStyleSheet("background-color: #e0e0e0; border: 1px solid #cccccc;")
+            self.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BG_MAIN}; border: 1px solid {ModernTheme.LIGHT_BORDER};")
             self.text_color = Qt.GlobalColor.black
         self.update()
 
@@ -244,8 +245,9 @@ class FileQueueWidget(QWidget):
         self.btn_rot_cw = QPushButton("↻")
         
         # Style for rotation buttons
-        for btn in [self.btn_rot_ccw, self.btn_rot_reset, self.btn_rot_cw]:
-             btn.setFixedWidth(50)
+        self.btn_rot_ccw.setFixedWidth(50)
+        self.btn_rot_reset.setFixedWidth(80)
+        self.btn_rot_cw.setFixedWidth(50)
              
         self.btn_rot_ccw.setToolTip("왼쪽으로 90도 회전 (Counter-Clockwise)")
         self.btn_rot_cw.setToolTip("오른쪽으로 90도 회전 (Clockwise)")
@@ -419,15 +421,23 @@ class FileQueueWidget(QWidget):
 
     def set_theme(self, mode):
         if mode == "dark":
-            self.list_widget.setStyleSheet("background-color: #2b2b2b; border: 1px solid #444; color: #eee;")
-            self.btn_add.setStyleSheet("background-color: #444; color: white; border: 1px solid #555;")
-            self.btn_del_sel.setStyleSheet("background-color: #555; color: white; border: 1px solid #666;")
-            self.btn_del_all.setStyleSheet("background-color: #d9534f; color: white; border: 1px solid #c9302c;")
+            self.list_widget.setStyleSheet(f"background-color: {ModernTheme.DARK_BG_INPUT}; border: 1px solid {ModernTheme.DARK_BORDER}; color: {ModernTheme.DARK_TEXT_MAIN};")
+            self.btn_add.setStyleSheet(f"background-color: {ModernTheme.DARK_BTN_BG}; color: {ModernTheme.DARK_TEXT_MAIN}; border: 1px solid {ModernTheme.DARK_BORDER};")
+            self.btn_del_sel.setStyleSheet(f"background-color: {ModernTheme.DARK_BTN_BG}; color: {ModernTheme.DARK_TEXT_MAIN}; border: 1px solid {ModernTheme.DARK_BORDER};")
+            self.btn_del_all.setStyleSheet(f"background-color: #d9534f; color: white; border: 1px solid #c9302c;")
+            # Rot buttons
+            self.btn_rot_ccw.setStyleSheet(f"background-color: {ModernTheme.DARK_BTN_BG}; color: {ModernTheme.DARK_TEXT_MAIN}; border: 1px solid {ModernTheme.DARK_BORDER};")
+            self.btn_rot_cw.setStyleSheet(f"background-color: {ModernTheme.DARK_BTN_BG}; color: {ModernTheme.DARK_TEXT_MAIN}; border: 1px solid {ModernTheme.DARK_BORDER};")
+            self.btn_rot_reset.setStyleSheet(f"background-color: {ModernTheme.DARK_BTN_BG}; color: {ModernTheme.DARK_TEXT_MAIN}; border: 1px solid {ModernTheme.DARK_BORDER};")
         else:
-            self.list_widget.setStyleSheet("background-color: #ffffff; border: 1px solid #cccccc; color: #333;")
-            self.btn_add.setStyleSheet("background-color: #f0f0f0; color: #333; border: 1px solid #ccc;")
-            self.btn_del_sel.setStyleSheet("background-color: #f0f0f0; color: #333; border: 1px solid #ccc;")
-            self.btn_del_all.setStyleSheet("background-color: #d9534f; color: white; border: 1px solid #d43f3a;")
+            self.list_widget.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BG_INPUT}; border: 1px solid {ModernTheme.LIGHT_BORDER}; color: {ModernTheme.LIGHT_TEXT_MAIN};")
+            self.btn_add.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BTN_BG}; color: {ModernTheme.LIGHT_TEXT_MAIN}; border: 1px solid {ModernTheme.LIGHT_BORDER};")
+            self.btn_del_sel.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BTN_BG}; color: {ModernTheme.LIGHT_TEXT_MAIN}; border: 1px solid {ModernTheme.LIGHT_BORDER};")
+            self.btn_del_all.setStyleSheet(f"background-color: #d9534f; color: white; border: 1px solid #d43f3a;")
+            # Rot buttons
+            self.btn_rot_ccw.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BTN_BG}; color: {ModernTheme.LIGHT_TEXT_MAIN}; border: 1px solid {ModernTheme.LIGHT_BORDER};")
+            self.btn_rot_cw.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BTN_BG}; color: {ModernTheme.LIGHT_TEXT_MAIN}; border: 1px solid {ModernTheme.LIGHT_BORDER};")
+            self.btn_rot_reset.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BTN_BG}; color: {ModernTheme.LIGHT_TEXT_MAIN}; border: 1px solid {ModernTheme.LIGHT_BORDER};")
 
 # =========================================================
 # 4. 로그 콘솔 (기존 유지)

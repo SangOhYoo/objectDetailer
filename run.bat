@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 :: ------------------------------------------------------------------
 :: [Settings] Define Project Variables
 :: ------------------------------------------------------------------
-set "PROJECT_NAME=SAM3_FaceDetailer_Ultimate"
+set "PROJECT_NAME=ObjectDetailer_Ultimate"
 set "VENV_DIR=venv"
 
 :: NOTE: We use absolute path for python exec later to avoid 'call activate' issues

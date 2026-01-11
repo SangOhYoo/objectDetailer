@@ -1,6 +1,9 @@
-
-import unittest
 import os
+import sys
+import unittest
+# Fix path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import yaml
 import tempfile
 from core.config import AppConfig

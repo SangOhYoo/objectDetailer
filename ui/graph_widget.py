@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QWidget
 from PyQt6.QtCore import Qt, QRect, QPoint
 from PyQt6.QtGui import QPainter, QPen, QColor
+from ui.styles import ModernTheme
 
 class ScheduleGraphWidget(QWidget):
     def __init__(self):
@@ -11,15 +12,15 @@ class ScheduleGraphWidget(QWidget):
         
     def set_theme(self, mode):
         if mode == "dark":
-            self.bg_color = QColor(30, 30, 30)
-            self.grid_color = QColor(60, 60, 60)
-            self.text_color = QColor(200, 200, 200)
-            self.line_color = QColor(100, 180, 255) # Light Blue
+            self.bg_color = QColor(ModernTheme.DARK_BG_PANEL)
+            self.grid_color = QColor(ModernTheme.DARK_BORDER)
+            self.text_color = QColor(ModernTheme.DARK_TEXT_SUB)
+            self.line_color = QColor(ModernTheme.DARK_ACCENT) 
         else:
-            self.bg_color = QColor(250, 250, 250)
-            self.grid_color = QColor(200, 200, 200)
-            self.text_color = QColor(50, 50, 50)
-            self.line_color = QColor(0, 120, 215) # Blue
+            self.bg_color = QColor(ModernTheme.LIGHT_BG_PANEL)
+            self.grid_color = QColor(ModernTheme.LIGHT_BORDER)
+            self.text_color = QColor(ModernTheme.LIGHT_TEXT_SUB)
+            self.line_color = QColor(ModernTheme.LIGHT_ACCENT)
         self.update()
 
     def set_data(self, values):

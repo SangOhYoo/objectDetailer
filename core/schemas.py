@@ -1,5 +1,5 @@
 """
-SAM3_FaceDetailer_Ultimate Configuration Schemas
+2: ObjectDetailer_Ultimate Configuration Schemas
 이 파일은 시스템 설정과 디테일러 설정의 데이터 구조(Dataclass)를 정의합니다.
 현재 시스템은 유연성을 위해 Dictionary 기반의 설정을 주로 사용하지만,
 이 클래스들은 설정 값의 타입과 기본값을 참조하는 스키마(Reference Schema)로 활용됩니다.

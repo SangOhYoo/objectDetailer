@@ -63,3 +63,23 @@ class SamInference:
         )
         
         return (masks[0] * 255).astype(np.uint8)
+
+    def unload_model(self):
+        """[New] Force unload SAM model to free VRAM"""
+        if self.predictor:
+            print("[SAM] Unloading model...")
+            try:
+                if hasattr(self.predictor.model, 'cpu'):
+                    self.predictor.model.cpu()
+                del self.predictor.model
+                del self.predictor
+            except:
+                pass
+            self.predictor = None
+            self.is_loaded = False
+            self.is_image_set = False
+            
+            import torch
+            import gc
+            gc.collect()
+            torch.cuda.empty_cache()

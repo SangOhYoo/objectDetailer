@@ -116,19 +116,13 @@ class ImageProcessor:
                 self.log(f"  [Error] Setup failed for {unit_name}: {e}")
                 traceback.print_exc()
             finally:
-                self.model_manager.manage_lora([], action="unload")
-                # [Optimized] 패스 종료 시 강제 메모리 정리 제거
-                # gc.collect()
-                # torch.cuda.empty_cache()
-                
-        if cfg.get('system', 'log_level') == 'DEBUG':
-            print("[Pipeline] Offloading models to free VRAM...")
-        self.detector.offload_models()
-        self.face_restorer.unload_model() 
-        self.model_manager.unload_model() 
-        
-        gc.collect()
-        torch.cuda.empty_cache()
+                # [Optimization] Only unload LoRAs if we need to switch them for the next pass
+                # self.model_manager.manage_lora([], action="unload")
+                pass
+
+        # [Efficiency] Removed per-image aggressive unloading.
+        # Models stay cached in ModelManager/Detector for the next image in the batch.
+        # VRAM is managed by diffusers 'enable_model_cpu_offload'.
         
         return result_img
 
@@ -435,6 +429,15 @@ class ImageProcessor:
         max_det = config.get('max_det', 20)
         if max_det > 0 and len(detections) > max_det:
             detections = detections[:max_det]
+        
+        # [Aggressive Cleanup] Offload Detector immediately
+        # YOLO/InsightFace models are no longer needed for this pass unless used inside loop (Gender check?).
+        # Wait, gender check currently happens inside the loop if 'gender_filter' is used.
+        # However, gender check uses `self.detector.analyze_gender` or `analyze_body_gender`.
+        # If we offload here, those will fail (or reload, which is slow).
+        # But if gender filter is NOT used, we can offload.
+        # Or we can just let it reload if needed (Aggressive policy).
+        self.detector.offload_models()
             
         # [New] Split Prompts by [SEP] (ADetailer Syntax)
         # Needed for per-detection prompt assignment
@@ -841,6 +844,26 @@ class ImageProcessor:
             
         if config.get('inpaint_width', 0) > 0: target_res = config['inpaint_width']
         
+        # [BMAB Feature] Dynamic Resolution Scaling
+        # If the actual face crop is larger than target_res, we increase target_res 
+        # to match the source resolution (preventing downscale -> upscale blur).
+        x1, y1, x2, y2 = box
+        w_box, h_box = x2 - x1, y2 - y1
+        raw_max_dim = max(w_box, h_box)
+        padded_dim = raw_max_dim * (1.0 + final_padding)
+        
+        # Check against current target_res
+        if padded_dim > target_res:
+            # Snap to nearest 64
+            new_res = int((padded_dim + 32) / 64) * 64
+            # Cap at 2048 (Safe limit for most VRAM)
+            MAX_RES = 2048
+            if new_res > MAX_RES: new_res = MAX_RES
+            
+            if new_res > target_res:
+                self.log(f"    [Resolution] Dynamic Upscale: {target_res} -> {new_res} (Source: {int(padded_dim)}px)")
+                target_res = new_res
+        
         # [BMAB Feature] Safety Limit
         MAX_SAFE_RES = 2048
         if target_res > MAX_SAFE_RES:
@@ -1106,10 +1129,20 @@ class ImageProcessor:
         if config.get('bmab_enabled', False):
              res_np = self._apply_bmab_effects(res_np, config)
 
-        # [Fix] Use Geometry Module for Inverse Transform & Blending
-        final_img = restore_and_paste(image, res_np, M, mask_blur=config['mask_blur'], paste_mask=paste_mask)
+        # [New] Post-Generation Sharpening
+        # Helps resolve "blurry" issues reported by users.
+        try:
+            sharpen_strength = config.get('post_sharpen', 0.3)
+            if sharpen_strength > 0:
+                gaussian_wa = cv2.GaussianBlur(res_np, (0, 0), 3.0)
+                res_np = cv2.addWeighted(res_np, 1.0 + sharpen_strength, gaussian_wa, -sharpen_strength, 0)
+        except Exception as e:
+            print(f"    [Warning] Post sharpening failed: {e}")
+
+        # 3. Restore & Paste
+        final_full_img = restore_and_paste(image, res_np, M, mask_blur=config['mask_blur'], paste_mask=paste_mask)
         
-        return final_img
+        return final_full_img
 
     def _apply_hires_upscale(self, image, box, kps, padding, target_size, upscaler_name, do_rotate):
         """

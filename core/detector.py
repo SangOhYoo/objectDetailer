@@ -106,13 +106,10 @@ class ObjectDetector:
 
             print(f"[Detector] Loading YOLO: {load_target}")
             
-            # [Fix] Accelerate 'init_empty_weights' hook bypass using Thread
-            def _load_yolo():
-                self.yolo_models[model_name] = YOLO(load_target)
-            
-            t = threading.Thread(target=_load_yolo)
-            t.start()
-            t.join()
+            # [Fix] Direct Load (No Threading needed in Spawned Process)
+            # Since we are in a clean isolated process, we don't need the thread hack
+            # to bypass potential accelerate hooks from the main process.
+            self.yolo_models[model_name] = YOLO(load_target)
 
         model = self.yolo_models[model_name]
         

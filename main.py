@@ -24,15 +24,23 @@ try:
 except Exception:
     pass
 
-# [Fix] Ultralytics(YOLO)와 Diffusers(Accelerate) 충돌 방지
-import torch
-import ultralytics
-
-from PyQt6.QtWidgets import QApplication
-from ui.main_window import MainWindow
-
 if __name__ == "__main__":
+    # [Core Fix] Move heavy imports INSIDE __main__ block
+    # This prevents spawned child processes on Windows from initializing CUDA
+    # when they re-import main.py.
+    
+    try:
+        multiprocessing.set_start_method('spawn', force=True)
+    except RuntimeError:
+        pass
     multiprocessing.freeze_support()
+    
+    # Late Imports (Heavy)
+    import torch
+    import ultralytics
+    from PyQt6.QtWidgets import QApplication
+    from ui.main_window import MainWindow
+
     # 불필요한 라이브러리 경고 메시지 숨기기
     warnings.filterwarnings("ignore", category=UserWarning, module="google.protobuf")
     warnings.filterwarnings("ignore", category=UserWarning, message=".*The parameter 'pretrained' is deprecated.*")

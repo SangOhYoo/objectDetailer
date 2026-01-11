@@ -79,7 +79,7 @@ def is_anatomically_correct(kps):
     
     return check1 and check2
 
-def align_and_crop(image, bbox, kps=None, target_size=512, padding=0.25, force_rotate=False, borderMode=cv2.BORDER_REFLECT):
+def align_and_crop(image, bbox, kps=None, target_size=512, padding=0.25, force_rotate=False, borderMode=cv2.BORDER_REFLECT, interpolation=cv2.INTER_LANCZOS4):
     """
     얼굴을 잘라내고, 필요시 회전하여 정자세(0도)로 만듭니다.
     반환값: cropped_img, M (변환행렬)
@@ -104,7 +104,8 @@ def align_and_crop(image, bbox, kps=None, target_size=512, padding=0.25, force_r
     M[1, 2] += (target_size / 2) - cy
     
     # 워핑 실행
-    aligned = cv2.warpAffine(image, M, (target_size, target_size), flags=cv2.INTER_LINEAR, borderMode=borderMode)
+    # [Fix] Use High Quality Interpolation (LANCZOS4) to prevent blur
+    aligned = cv2.warpAffine(image, M, (target_size, target_size), flags=interpolation, borderMode=borderMode)
     
     return aligned, M
 
@@ -120,7 +121,8 @@ def restore_and_paste(base_image, processed_crop, M, mask_blur=12, paste_mask=No
     
     # 2. 처리된 이미지를 원본 크기 캔버스에 역회전하여 배치
     # borderMode=TRANSPARENT로 하면 배경은 투명하게 됨 (혹은 0)
-    restored_patch = cv2.warpAffine(processed_crop, M_inv, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+    # [Fix] Use High Quality Interpolation (LANCZOS4)
+    restored_patch = cv2.warpAffine(processed_crop, M_inv, (w, h), flags=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_CONSTANT)
     
     # 3. 마스크 생성 (사각형 White Mask -> 역회전)
     if paste_mask is not None:

@@ -2,7 +2,6 @@ import sys
 import os
 import cv2
 import numpy as np
-import torch
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QTabWidget, QLabel, QPushButton, QSplitter,
                              QTextEdit, QComboBox, QGroupBox, QFileDialog, QSizePolicy, QGridLayout,
@@ -14,21 +13,32 @@ from ui.main_window_tabs import AdetailerUnitWidget
 from ui.workers import ProcessingController
 from ui.components import ImageCanvas, ComparisonViewer, FileQueueWidget
 from core.config import config_instance as cfg
+from ui.styles import ModernTheme
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Standalone ADetailer - Dual GPU Edition")
         # [Ref] Increase Window Size for Wide Right Panel View (User Permission)
-        self.resize(1800, 1050) # Wide HD+
+        self.resize(1805, 1560) # Wide HD+
         
+        # [Diagnostic] Multi-GPU check (Local Import for Isolation)
+        import torch
+        if torch.cuda.is_available():
+            count = torch.cuda.device_count()
+            print(f"[System] Multi-GPU Detection: {count} GPUs found.")
+            for i in range(count):
+                print(f"  - GPU {i}: {torch.cuda.get_device_name(i)}")
+        else:
+            print("[System] No GPU detected by PyTorch.")
+
         self.controller = None
         self.preview_processor = None # [New] For quick detection preview
         
-        self.init_ui()
-        
         # [Fix] Theme Initialization (Load from Config)
-        self.current_theme = "light" # Default
+        self.current_theme = "light" # Default before init_ui
+        
+        self.init_ui()
         self.load_theme_setting()
 
     def init_ui(self):
@@ -102,31 +112,51 @@ class MainWindow(QMainWindow):
         else:
             self.combo_global_vae.addItem("Automatic")
         
-        # [New] Global Save/Load Buttons
-        btn_global_save = QPushButton("💾 저장")
+        # [New] Global Save/Load Buttons (Shortened for Single Row)
+        btn_global_save = QPushButton("💾")
         btn_global_save.setToolTip("현재 모든 설정(모델, 탭 설정 등)을 config.yaml에 저장합니다.")
         btn_global_save.clicked.connect(self.save_global_settings)
-        btn_global_save.setFixedWidth(80) # [Fix] Force width
+        btn_global_save.setFixedSize(30, 30) # Compact Icon Button
         
-        btn_global_load = QPushButton("🔄 로드")
+        btn_global_load = QPushButton("🔄")
         btn_global_load.setToolTip("config.yaml에서 설정을 다시 불러옵니다.")
         btn_global_load.clicked.connect(self.load_global_settings)
-        btn_global_load.setFixedWidth(80) # [Fix] Force width
+        btn_global_load.setFixedSize(30, 30) # Compact Icon Button
 
-        # [Ref] 2-Row Layout for Narrow Panel (500px)
-        global_layout.addWidget(QLabel("체크포인트:"), 0, 0)
-        global_layout.addWidget(self.combo_global_ckpt, 0, 1)
-        global_layout.addWidget(btn_global_save, 0, 2)
+        # [Ref] Single-Row Layout for Global Settings
+        # Layout: [Ckpt Label] [Ckpt Combo] [Save] | [VAE Label] [VAE Combo] [Load]
+        # To fit in 1/3 width (~600px), we use minimal spacing
         
-        global_layout.addWidget(QLabel("VAE:"), 1, 0)
-        global_layout.addWidget(self.combo_global_vae, 1, 1)
-        global_layout.addWidget(btn_global_load, 1, 2)
-        
-        # [Ref] Tighter Global Margins
-        global_layout.setContentsMargins(2, 2, 2, 2)
+        global_layout = QHBoxLayout()
+        global_layout.setContentsMargins(5, 5, 5, 5)
         global_layout.setSpacing(5)
-        # [Fix] Expand both combos equally
-        global_layout.setColumnStretch(1, 1)
+        
+        # Checkpoint Section
+        lbl_ckpt = QLabel("Ckpt:")
+        lbl_ckpt.setToolTip("Stable Diffusion Checkpoint Model")
+        global_layout.addWidget(lbl_ckpt)
+        
+        self.combo_global_ckpt.setMaximumWidth(220) # [Fix] Limit width
+        global_layout.addWidget(self.combo_global_ckpt, 1) # Stretch 1
+        
+        btn_global_save.setFixedSize(40, 30) # [Fix] Slightly wider
+        global_layout.addWidget(btn_global_save)
+        
+        # VAE Section
+        # Divider (Vertical Line)
+        line = QLabel("|")
+        line.setStyleSheet("color: gray;")
+        global_layout.addWidget(line)
+        
+        lbl_vae = QLabel("VAE:")
+        lbl_vae.setToolTip("VAE Model")
+        global_layout.addWidget(lbl_vae)
+        
+        self.combo_global_vae.setMaximumWidth(220) # [Fix] Limit width
+        global_layout.addWidget(self.combo_global_vae, 1) # Stretch 1
+        
+        btn_global_load.setFixedSize(40, 30) # [Fix] Slightly wider
+        global_layout.addWidget(btn_global_load)
         
         self.global_group.setLayout(global_layout)
         left_layout.addWidget(self.global_group)
@@ -153,9 +183,9 @@ class MainWindow(QMainWindow):
         
         left_panel.setMinimumWidth(400) # 최소 너비 확보 (40% 비율 유연성)
 
-        # [UI Fix] Initial Splitter Ratio (Left:Right = ~1050:550)
-        # Using [1050, 550] ensures the left panel gets ~65% of the 1600px window (~1040px)
-        self.splitter.setSizes([1050, 550])
+        # [Ref] Splitter Ratio (1:2 => Left Panel ~1/3 Width)
+        # Main Window Width is set to 1800, so Left ~600, Right ~1200
+        self.splitter.setSizes([600, 1200])
 
         # ============================================================
         # [Right Panel] Preview & Logs
@@ -194,11 +224,16 @@ class MainWindow(QMainWindow):
         self.btn_run = QPushButton("🚀 일괄 실행 (Run Batch)")
         self.btn_run.clicked.connect(self.start_processing)
         self.btn_run.setFixedHeight(45)
-        self.btn_run.setStyleSheet("""
-            QPushButton { background-color: #27ae60; color: white; font-weight: bold; border-radius: 4px; }
-            QPushButton:hover { background-color: #2ecc71; }
-            QPushButton:pressed { background-color: #219150; }
-            QPushButton:disabled { background-color: #95a5a6; color: #bdc3c7; }
+        self.btn_run.setFixedHeight(45)
+        self.btn_run.setProperty("class", "action-button-run") # For future specific styling if needed
+        # [Ref] Removed inline style, use theme defaults or add to styles.py if specific class needed
+        # Keeping minimal inline for specific color semantic (Run = Green) but simplified
+        self.btn_run.setStyleSheet(f"""
+            QPushButton {{ 
+                background-color: #27ae60; color: white; font-weight: bold; border: none; 
+            }}
+            QPushButton:hover {{ background-color: #2ecc71; }}
+            QPushButton:pressed {{ background-color: #219150; }}
         """)
         
         self.btn_stop = QPushButton("⏹ 중지")
@@ -214,7 +249,8 @@ class MainWindow(QMainWindow):
         
         self.spin_worker_count = QSpinBox()
         self.spin_worker_count.setRange(1, 16)
-        # Default: GPU Count or 1
+        # Default: GPU Count or 1 (Local Import for Isolation)
+        import torch
         default_workers = 1
         if torch.cuda.is_available():
             default_workers = torch.cuda.device_count()
@@ -246,17 +282,17 @@ class MainWindow(QMainWindow):
         self.progress_bar.setFixedHeight(25)
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setVisible(True) # Always visible now
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 1px solid #bdc3c7;
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                border: 1px solid {ModernTheme.DARK_BORDER if self.current_theme == 'dark' else ModernTheme.LIGHT_BORDER};
                 border-radius: 4px;
                 text-align: center;
-                background-color: #ecf0f1;
-            }
-            QProgressBar::chunk {
-                background-color: #3498db;
+                background-color: transparent;
+            }}
+            QProgressBar::chunk {{
+                background-color: {ModernTheme.DARK_ACCENT if self.current_theme == 'dark' else ModernTheme.LIGHT_ACCENT};
                 border-radius: 3px;
-            }
+            }}
         """)
 
         right_layout.addWidget(self.right_splitter, 3)
@@ -271,8 +307,11 @@ class MainWindow(QMainWindow):
         
         # [New] Apply Splitter Size (Force Left Limit)
         # Using QTimer to apply AFTER layout calculation
-        # [User Request] Set left panel to safe narrow 550px (Dense) for Wide Right Panel (1250px)
-        QTimer.singleShot(0, lambda: self.splitter.setSizes([550, 1250]))
+        # [Adjust] Widen Left Panel (750px) for better visibility
+        # [New] Apply Splitter Size (Force Left Limit)
+        # Using QTimer to apply AFTER layout calculation
+        # [Adjust] Widen Left Panel (1070px) for better visibility
+        QTimer.singleShot(0, lambda: self.splitter.setSizes([1070, 735]))
 
         self.status_filename_label = QLabel("")
         self.status_filename_label.setStyleSheet("margin-left: 10px;")
@@ -388,60 +427,19 @@ class MainWindow(QMainWindow):
     # --- Theme & Basics ---
     def apply_dark_theme(self):
         self.current_theme = "dark"
-        dark_style = """
-            QMainWindow, QWidget { background-color: #2b2b2b; color: #eeeeee; font-size: 10pt; }
-            QSplitter::handle { background-color: #444; width: 4px; }
-            QGroupBox { border: 1px solid #555; margin-top: 15px; border-radius: 4px; }
-            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #4dabf7; font-weight: bold; }
-            QLineEdit, QTextEdit, QComboBox { 
-                background-color: #333; border: 1px solid #666; padding: 4px; border-radius: 3px; color: #eee;
-            }
-            QSpinBox, QDoubleSpinBox {
-                background-color: #333; border: 1px solid #666; padding: 2px; border-radius: 3px; color: #eee;
-            }
-            QSpinBox::up-button, QDoubleSpinBox::up-button {
-                subcontrol-origin: border; subcontrol-position: top right; width: 24px;
-                background-color: #555; border-left: 1px solid #777; border-bottom: 1px solid #777;
-                border-top-right-radius: 3px; margin: 0px;
-            }
-            QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover { background-color: #666; }
-            QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed { background-color: #444; }
+        self.setStyleSheet(ModernTheme.get_dark_theme())
+        
+        # [Ref] Update specifics that depend on theme variables but aren't covered by global sheet
+        self.log_text.setStyleSheet(f"background-color: {ModernTheme.DARK_BG_INPUT}; color: #00ff00; border: 1px solid {ModernTheme.DARK_BORDER}; font-family: Consolas;")
+        self.btn_stop.setStyleSheet("background-color: #e74c3c; color: white; border: none; font-weight: bold;")
+        
+        # Update progress bar dynamically
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{ border: 1px solid {ModernTheme.DARK_BORDER}; text-align: center; color: {ModernTheme.DARK_TEXT_MAIN}; }}
+            QProgressBar::chunk {{ background-color: {ModernTheme.DARK_ACCENT}; }}
+        """)
 
-            QSpinBox::down-button, QDoubleSpinBox::down-button {
-                subcontrol-origin: border; subcontrol-position: bottom right; width: 24px;
-                background-color: #555; border-left: 1px solid #777; border-top: 1px solid #777;
-                border-bottom-right-radius: 3px; margin: 0px;
-            }
-            QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover { background-color: #666; }
-            QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed { background-color: #444; }
-
-            QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
-                width: 0px; height: 0px;
-                border-left: 5px solid transparent; border-right: 5px solid transparent;
-                border-bottom: 6px solid #fff;
-            }
-            QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
-                width: 0px; height: 0px;
-                border-left: 5px solid transparent; border-right: 5px solid transparent;
-                border-top: 6px solid #fff;
-            }
-            /* [New] Colored Borders for Prompts */
-            QTextEdit#pos_prompt { border: 2px solid #4dabf7; background-color: #263238; }
-            QTextEdit#neg_prompt { border: 2px solid #e74c3c; background-color: #3e2723; }
-            QTextEdit#yolo_classes { border: 1px solid #9b59b6; }
-            QRadioButton { spacing: 5px; color: #eeeeee; }
-            QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 2px solid #666; background-color: #333; }
-            QRadioButton::indicator:checked { background-color: #4dabf7; border-color: #4dabf7; }
-            QRadioButton::indicator:unchecked:hover { border-color: #888; }
-            QTabBar::tab { background: #3a3a3a; color: #aaa; padding: 8px 15px; border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 2px; }
-            QTabBar::tab:selected { background: #0078d7; color: white; font-weight: bold; }
-            QTabBar::tab:hover:!selected { background: #4a4a4a; color: #ddd; }
-        """
-        self.setStyleSheet(dark_style)
-        self.log_text.setStyleSheet("background-color: #1e1e1e; color: #00ff00; border: 2px solid #c0392b; font-family: Consolas;")
-        self.btn_stop.setStyleSheet("background-color: #c0392b; color: white;")
         self.sub_view.set_theme("dark")
-        self.compare_view.set_theme("dark")
         self.compare_view.set_theme("dark")
         self.file_queue.set_theme("dark")
         
@@ -451,62 +449,19 @@ class MainWindow(QMainWindow):
 
     def apply_light_theme(self):
         self.current_theme = "light"
-        light_style = """
-            QMainWindow { background-color: #f5f6fa; }
-            QLabel { color: #2c3e50; font-family: 'Segoe UI', sans-serif; }
-            QGroupBox { font-weight: bold; border: 1px solid #dcdde1; max-height: 50; margin-top: 1.5ex; border-radius: 5px; background-color: #ffffff; }
-            QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 5px; color: #34495e; }
-            QPushButton { background-color: #ecf0f1; border: 1px solid #bdc3c7; border-radius: 4px; padding: 5px; }
-            QPushButton:hover { background-color: #bdc3c7; }
-            QLineEdit, QTextEdit, QComboBox { 
-                background-color: #ffffff; border: 1px solid #999; padding: 4px; border-radius: 3px; color: #333;
-            }
-            QSpinBox, QDoubleSpinBox {
-                background-color: #ffffff; border: 1px solid #999; padding: 2px; border-radius: 3px; color: #333;
-            }
-            QSpinBox::up-button, QDoubleSpinBox::up-button {
-                subcontrol-origin: border; subcontrol-position: top right; width: 24px;
-                background-color: #eee; border-left: 1px solid #ccc; border-bottom: 1px solid #ccc;
-                border-top-right-radius: 3px; margin: 0px;
-            }
-            QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover { background-color: #ddd; }
-            QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed { background-color: #ccc; }
+        self.setStyleSheet(ModernTheme.get_light_theme())
+        
+        # [Ref] Specifics for Light
+        self.log_text.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BG_INPUT}; color: #333; border: 1px solid {ModernTheme.LIGHT_BORDER}; font-family: Consolas;")
+        self.btn_stop.setStyleSheet("background-color: #e74c3c; color: white; border: none; font-weight: bold;")
+        
+        # Update progress bar dynamically
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{ border: 1px solid {ModernTheme.LIGHT_BORDER}; text-align: center; color: {ModernTheme.LIGHT_TEXT_MAIN}; }}
+            QProgressBar::chunk {{ background-color: {ModernTheme.LIGHT_ACCENT}; }}
+        """)
 
-            QSpinBox::down-button, QDoubleSpinBox::down-button {
-                subcontrol-origin: border; subcontrol-position: bottom right; width: 24px;
-                background-color: #eee; border-left: 1px solid #ccc; border-top: 1px solid #ccc;
-                border-bottom-right-radius: 3px; margin: 0px;
-            }
-            QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover { background-color: #ddd; }
-            QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed { background-color: #ccc; }
-
-            QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
-                width: 0px; height: 0px;
-                border-left: 5px solid transparent; border-right: 5px solid transparent;
-                border-bottom: 6px solid #333;
-            }
-            QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
-                width: 0px; height: 0px;
-                border-left: 5px solid transparent; border-right: 5px solid transparent;
-                border-top: 6px solid #333;
-            }
-            /* [New] Colored Borders for Prompts (Light Mode) */
-            QTextEdit#pos_prompt { border: 2px solid #2980b9; background-color: #eaf2f8; }
-            QTextEdit#neg_prompt { border: 2px solid #c0392b; background-color: #f9ebea; }
-            QTextEdit#yolo_classes { border: 1px solid #8e44ad; }
-            QRadioButton { spacing: 5px; color: #333333; }
-            QRadioButton::indicator { width: 14px; height: 14px; border-radius: 7px; border: 2px solid #999; background-color: #fff; }
-            QRadioButton::indicator:checked { background-color: #0078d7; border-color: #0078d7; }
-            QRadioButton::indicator:unchecked:hover { border-color: #555; }
-            QTabBar::tab { background: #e0e0e0; color: #555; padding: 8px 15px; border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 2px; border: 1px solid #ccc; border-bottom: none; }
-            QTabBar::tab:selected { background: #0078d7; color: white; font-weight: bold; border-color: #0056b3; }
-            QTabBar::tab:hover:!selected { background: #d0d0d0; }
-        """
-        self.setStyleSheet(light_style)
-        self.log_text.setStyleSheet("background-color: #ffffff; color: #000000; border: 2px solid #c0392b; font-family: Consolas;")
-        self.btn_stop.setStyleSheet("background-color: #d32f2f; color: white;")
         self.sub_view.set_theme("light")
-        self.compare_view.set_theme("light")
         self.compare_view.set_theme("light")
         self.file_queue.set_theme("light")
 
@@ -758,6 +713,18 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", f"탐지 오류: {e}")
         finally:
             self.set_ui_enabled(True)
+            # [Fix] Clean up VRAM in GUI process after preview
+            if self.preview_processor:
+                try:
+                    self.preview_processor.detector.offload_models()
+                    if self.preview_processor.sam:
+                        self.preview_processor.sam.unload_model()
+                    import torch
+                    import gc
+                    gc.collect()
+                    torch.cuda.empty_cache()
+                except:
+                    pass
 
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication

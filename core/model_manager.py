@@ -203,14 +203,20 @@ class ModelManager:
                 # gpu_id logic
                 gpu_id = 0
                 if isinstance(self.device, str) and self.device.startswith("cuda:"):
-                        try:
-                            gpu_id = int(self.device.split(":")[1])
-                        except:
-                            pass
+                    try:
+                        gpu_id = int(self.device.split(":")[1])
+                    except:
+                        pass
                 
-                # enable_model_cpu_offload is preferred over sequential for non-SDXL usually, 
-                # but enable_model_cpu_offload allows standard offloading.
-                # enable_sequential_cpu_offload is even more aggressive (offloads blocks).
+                # [Fix] Isolation Check: If only 1 GPU is visible (isolated), always use 0
+                # This is crucial for multi-GPU setups where CUDA_VISIBLE_DEVICES is used.
+                if torch.cuda.is_available():
+                    vis_count = torch.cuda.device_count()
+                    if vis_count == 1:
+                        # Even if self.device was 'cuda:1', if isolation is active, we must use 0.
+                        gpu_id = 0
+                    elif gpu_id >= vis_count:
+                        gpu_id = 0 # Fallback
                 
                 print(f"[ModelManager] Enabling Model CPU Offload (GPU: {gpu_id})")
                 self.pipe.enable_model_cpu_offload(gpu_id=gpu_id)

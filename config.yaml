@@ -149,7 +149,7 @@ ui_settings:
   패스 2:
     enabled: true
     detector_model: Anzhcs ManFace v02 1024 y8n.pt
-    yolo_classes: 'face
+    yolo_classes: '
 
       face
 
@@ -164,11 +164,6 @@ ui_settings:
       detailed skin texture, pores, peach fuzz, visible skin details, high resolution,
       8k, dslr, (photorealistic:1.4), <lora:polyhedron_new_skin_v1.1:0.1>, detailed
       skin,  [<lora:sangoh-10:0.7>:(21 years old asian boy:0.2)], (open eyes:1.2),[SEP],
-
-      (masterpiece), (best quality), (high resolution), (photorealistic), [<lora:sangoh-10:0.7>:(21
-      years old asian boy:0.2)], pale skin, (glossy skin:1.1), looking at another,
-      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
-      moaning, ecstacy:1.6), (shocked:1.2), [SEP]
 
       (masterpiece), (best quality), (high resolution), (photorealistic), <lora:eunwoo:0.8>eunwoo,
       (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7), (full-face
@@ -243,7 +238,14 @@ ui_settings:
       (masterpiece), (best quality), (high resolution), (photorealistic), <lora:wonwoo-10:0.8>wonwoo,
       pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
       (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
-      [SEP]'
+      [SEP]
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), [<lora:sangoh-10:0.7>:(21
+      years old asian boy:0.2)], pale skin, (glossy skin:1.1), looking at another,
+      (seductive smile:0.8), (angry:0.7), (full-face blush, embarrassed, aroused,
+      moaning, ecstacy:1.6), (shocked:1.2), [SEP]
+
+      '
     neg_prompt: (worst quality, low quality, normal quality, lowres, bokeh, blur:2.0),
       (polydactyly, polydactylism:2.0)
     auto_prompt_injection: true
@@ -251,13 +253,13 @@ ui_settings:
     ignore_edge_touching: false
     anatomy_check: false
     use_pose_rotation: false
-    max_det: 2
+    max_det: 10
     inpaint_width: 512
     inpaint_height: 512
     mask_merge_mode: None
     use_noise_mask: false
     auto_rotate: true
-    color_fix: Adain
+    color_fix: Histogram
     mask_content: original
     inpaint_full_res: false
     use_soft_inpainting: false
@@ -297,7 +299,9 @@ ui_settings:
     restore_face: false
     use_hires_fix: false
     sep_noise: false
-    conf_thresh: 0.8
+    post_sharpen: 0.3
+    restore_face_strength: 1.0
+    conf_thresh: 0.03
     min_face_ratio: 0.001
     max_face_ratio: 1.0
     mask_dilation: 4
@@ -331,7 +335,6 @@ ui_settings:
     bmab_edge_low: 50
     bmab_edge_high: 200
     resize_ratio: 0.6
-    restore_face_strength: 1.0
     hires_upscale_factor: 1.5
     hires_steps: 14
     hires_denoise: 0.65
@@ -345,21 +348,8 @@ ui_settings:
     yolo_classes: ''
     use_sam: false
     pos_prompt: '(masterpiece), (best quality), (high resolution), (photorealistic),
-      [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>],[SEP],
-
-      (masterpiece), (best quality), (high resolution), (photorealistic), [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>],  <lora:orgasm
-      face_v2:1.2>, orgasm face, female orgasm, orgasm,pale skin, (glossy skin:1.1),
-      (half-closed eyes:1.2), (wide open mouth:1.7), (full-face blush:1.6), (shocked:1.2),
-      [SEP],
-
-      (masterpiece), (best quality), (high resolution), (photorealistic:1.4), <lora:polyhedron_new_skin_v1.1:0.1>,
-      detailed skin, [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>], (closed eyes:1.2),
-      (open mouth:1.4), [SEP],
-
-      (masterpiece), (best quality), (high resolution), hyper realistic, raw photo,
-      detailed skin texture, pores, peach fuzz, visible skin details, high resolution,
-      8k, dslr, (photorealistic:1.4), <lora:polyhedron_new_skin_v1.1:0.1>, detailed
-      skin, [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>], (open eyes:1.2),[SEP],
+      [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>], pale skin, (glossy skin:1.1),
+      (full-face blush:1.6), [SEP],
 
       (masterpiece), (best quality), (high resolution), (photorealistic), <lora:sunyoung-09:0.7>,
       pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
@@ -1305,7 +1295,29 @@ ui_settings:
       (masterpiece), (best quality), (high resolution), (photorealistic), <lora:Zoe:0.8>,
       pale skin, (glossy skin:1.1), looking at another, (seductive smile:0.8), (angry:0.7),
       (full-face blush, embarrassed, aroused, moaning, ecstacy:1.6), (shocked:1.2),
-      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP]'
+      parted lips, pink lipstick, (wearing pink lip-gloss:1.1), [SEP]
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:JooMeePark-10:0.7>,
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), <lora:JooMiPark:1.1>,
+      [SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic:1.4), <lora:polyhedron_new_skin_v1.1:0.1>,
+      detailed skin, [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>], (closed eyes:1.2),
+      (open mouth:1.4), [SEP],
+
+      (masterpiece), (best quality), (high resolution), hyper realistic, raw photo,
+      detailed skin texture, pores, peach fuzz, visible skin details, high resolution,
+      8k, dslr, (photorealistic:1.4), <lora:polyhedron_new_skin_v1.1:0.1>, detailed
+      skin, [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>], (open eyes:1.2),[SEP],
+
+      (masterpiece), (best quality), (high resolution), (photorealistic), [<lora:JooMiPark:1.1>:<lora:JooMeePark-10:0.2>],  <lora:orgasm
+      face_v2:1.2>, orgasm face, female orgasm, orgasm,pale skin, (glossy skin:1.1),
+      (half-closed eyes:1.2), (wide open mouth:1.7), (full-face blush:1.6), (shocked:1.2),
+      [SEP],
+
+      '
     neg_prompt: (worst quality, low quality, normal quality, lowres, bokeh, blur:2.0),
       (polydactyly, polydactylism:2.0)
     auto_prompt_injection: true
@@ -1313,7 +1325,7 @@ ui_settings:
     ignore_edge_touching: false
     anatomy_check: false
     use_pose_rotation: false
-    max_det: 1
+    max_det: 2
     inpaint_width: 512
     inpaint_height: 512
     mask_merge_mode: None
@@ -1359,6 +1371,8 @@ ui_settings:
     restore_face: false
     use_hires_fix: false
     sep_noise: false
+    post_sharpen: 0.35
+    restore_face_strength: 0.5
     conf_thresh: 0.85
     min_face_ratio: 0.001
     max_face_ratio: 1.0
@@ -1393,7 +1407,6 @@ ui_settings:
     bmab_edge_low: 50
     bmab_edge_high: 200
     resize_ratio: 0.6
-    restore_face_strength: 1.0
     hires_upscale_factor: 1.5
     hires_steps: 14
     hires_denoise: 0.65
@@ -2330,23 +2343,34 @@ ui_settings:
     seed: -1
   패스 14:
     enabled: false
-    detector_model: sam3.pt
+    detector_model: Anzhcs WomanFace v05 1024 y8n.pt
     yolo_classes: ''
     use_sam: false
-    pos_prompt: ''
-    neg_prompt: ''
+    pos_prompt: 'score 9, score 8 up, score 7 up, score 6 up, rating explicit, source
+      photo, 1girl, <lora:JooMiPark_SDXL-10:1.5>, joomipark, raw photo, 8k uhd, dslr,
+      soft lighting, high quality, photorealistic,[SEP]
+
+      [SKIP][SEP]'
+    neg_prompt: score 6, score 5, score 4, deformed, deformed face, low quality, bad
+      quality, worst quality, (drawn, furry, illustration, cartoon, anime, comic:1.5),
+      3d, cgi, extra fingers, (source anime, source cartoon, source furry, source
+      western, source comic, source pony), deformed teeth, small breasts, small chest,
+      camera, Beards, glasses, futanari, collage
     auto_prompt_injection: true
     gender_filter: All
     ignore_edge_touching: false
     anatomy_check: true
     use_pose_rotation: false
     max_det: 20
-    inpaint_width: 512
-    inpaint_height: 512
+    inpaint_width: 1024
+    inpaint_height: 1024
     mask_merge_mode: None
     use_noise_mask: false
     auto_rotate: true
-    color_fix: None
+    color_fix: Linear
+    mask_content: original
+    inpaint_full_res: false
+    use_soft_inpainting: false
     control_model: None
     control_module: None
     dd_enabled: false
@@ -2361,26 +2385,31 @@ ui_settings:
     dd_smooth: true
     dd_mode: both
     dd_hires: false
+    hires_upscaler: None
     bmab_enabled: true
     resize_enable: false
     resize_align: Center
+    bmab_landscape_detail: false
+    bmab_edge_enabled: false
     sort_method: 신뢰도
     sep_ckpt: false
     sep_ckpt_name: Use Global
     sep_vae: false
     sep_vae_name: Use Global
     sep_sampler: false
-    sampler_name: Euler a Automatic
+    sampler_name: Euler a Karras
     sep_steps: false
-    steps: 20
+    steps: 24
     sep_cfg: false
     cfg_scale: 7.0
     sep_clip: false
     clip_skip: 2
-    restore_face: false
+    restore_face: true
     use_hires_fix: false
     sep_noise: false
-    conf_thresh: 0.35
+    post_sharpen: 0.6
+    restore_face_strength: 1.0
+    conf_thresh: 0.59
     min_face_ratio: 0.01
     max_face_ratio: 1.0
     mask_dilation: 4
@@ -2391,21 +2420,35 @@ ui_settings:
     sam_points_per_side: 32
     sam_pred_iou_thresh: 0.88
     sam_stability_score_thresh: 0.95
-    denoising_strength: 0.4
+    denoising_strength: 0.48
     context_expand_factor: 1.5
     crop_padding: 32
+    soft_schedule_bias: 1.0
+    soft_preservation_strength: 0.5
+    soft_transition_contrast: 4.0
+    soft_mask_influence: 0.0
+    soft_diff_threshold: 0.5
+    soft_diff_contrast: 2.0
     control_weight: 0.5
     guidance_start: 0.0
     guidance_end: 1.0
     bmab_contrast: 1.0
     bmab_brightness: 1.0
     bmab_sharpness: 1.0
-    bmab_color_temp: 0.0
+    bmab_color_saturation: 1.0
+    bmab_color_temperature: 0.0
     bmab_noise_alpha: 0.0
+    bmab_noise_alpha_final: 0.0
     bmab_edge_strength: 0.0
     bmab_edge_low: 50
     bmab_edge_high: 200
     resize_ratio: 0.6
+    hires_upscale_factor: 1.5
+    hires_steps: 14
+    hires_denoise: 0.4
+    hires_width: 0
+    hires_height: 0
+    hires_cfg: 5.0
     seed: -1
   패스 15:
     enabled: false

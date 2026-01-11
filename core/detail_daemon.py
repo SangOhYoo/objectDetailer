@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 from contextlib import contextmanager
 
 def make_schedule(steps, start, end, bias, amount, exponent, start_offset, end_offset, fade, smooth):
@@ -49,6 +48,7 @@ class DetailDaemonContext:
     Context manager to patch the pipe's scheduler step function to inject noise.
     """
     def __init__(self, pipe, enabled, config):
+        import torch
         self.pipe = pipe
         self.enabled = enabled
         self.config = config

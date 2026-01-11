@@ -5,10 +5,12 @@ from core.config import config_instance as cfg
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QComboBox, QCheckBox, QTextEdit, QGroupBox,
                              QDoubleSpinBox, QSlider, QScrollArea, QSpinBox,
-                             QRadioButton, QButtonGroup, QGridLayout, QSizePolicy, QPushButton)
+                             QRadioButton, QButtonGroup, QGridLayout, QSizePolicy, QPushButton,
+                             QAbstractSpinBox)
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from core.detail_daemon import make_schedule
 from ui.graph_widget import ScheduleGraphWidget
+from ui.styles import ModernTheme
 
 class AdetailerUnitWidget(QWidget):
     # [Signal] Request Main Window to run detection preview
@@ -56,7 +58,7 @@ class AdetailerUnitWidget(QWidget):
         row1_layout = QHBoxLayout()
         
         self.chk_enable = QCheckBox(f"활성화 ({self.unit_name})") # Shortened label
-        self.chk_enable.setStyleSheet("font-weight: bold; color: #3498db;")
+        self.chk_enable.setObjectName("important_chk")
         self.chk_enable.setChecked(self.saved_config.get('enabled', ("1" in self.unit_name)))
         row1_layout.addWidget(self.chk_enable)
         
@@ -84,7 +86,7 @@ class AdetailerUnitWidget(QWidget):
         self.btn_reset = QPushButton("초기화 (Reset)")
         self.btn_reset.setToolTip("이 패스의 모든 설정을 기본값으로 되돌립니다.")
         self.btn_reset.clicked.connect(self.on_reset_clicked)
-        self.btn_reset.setStyleSheet("background-color: #e74c3c; color: white;") # Warning Color
+        self.btn_reset.setObjectName("warning_btn")
         row1_layout.addWidget(self.btn_reset)
 
         # [New] Detect Preview Button
@@ -182,11 +184,14 @@ class AdetailerUnitWidget(QWidget):
         # --- TAB 1: Detection & Mask ---
         tab1 = QWidget()
         t1_layout = QVBoxLayout(tab1)
-        t1_layout.setContentsMargins(5,5,5,5)
+        t1_layout.setContentsMargins(2, 2, 2, 2)
+        t1_layout.setSpacing(4) # Tighter spacing
 
         # Detection Group
         g_det = QGroupBox("감지 설정 (Detection)")
         l_det = QGridLayout()
+        l_det.setContentsMargins(5, 10, 5, 5) # Top margin for title
+        l_det.setVerticalSpacing(4) # Tighter vertical gap
         # Gender/Edge/Anatomy
         self.combo_gender = QComboBox()
         self.combo_gender.addItems(["All", "Male", "Female"])
@@ -202,7 +207,7 @@ class AdetailerUnitWidget(QWidget):
         self.chk_pose_rotation = QCheckBox("Pose회전")
         self.chk_pose_rotation.setToolTip("YOLO Pose를 사용하여 누워있는 신체의 머리 방향을 감지하고 회전합니다.")
         self.chk_pose_rotation.setChecked(self.saved_config.get('use_pose_rotation', False))
-        self.chk_pose_rotation.setStyleSheet("color: #8e44ad; font-weight: bold;")
+        self.chk_pose_rotation.setObjectName("purple_chk")
 
         l_det.addWidget(QLabel("성별:"), 0, 0)
         l_det.addWidget(self.combo_gender, 0, 1, 1, 3) # Span 3 columns
@@ -221,13 +226,33 @@ class AdetailerUnitWidget(QWidget):
         # Row 3: Max Area
         self.add_slider_row(l_det, 3, "최대(%):", "max_face_ratio", 0.0, 100.0, def_max_face, 0.1)
         
-        # Sort & Limit
+        # [Ref] Max Count Slider UI (Aligned)
         l_det.addWidget(QLabel("최대 수:"), 4, 0)
-        self.spin_top_k = QSpinBox()
-        self.spin_top_k.setValue(self.saved_config.get('max_det', cfg.get('defaults', 'max_det') or 20))
-        # [Ref] Compact Width for Max Count
+        
+        self.slider_max_det = QSlider(Qt.Orientation.Horizontal)
+        self.slider_max_det.setRange(1, 100)
+        
+        self.spin_top_k = QSpinBox() # Preserve name for compatibility
+        self.spin_top_k.setRange(1, 100)
+        # [Ref] Match SpinBox width to others (70)
         self.spin_top_k.setFixedWidth(70)
-        l_det.addWidget(self.spin_top_k, 4, 1)
+        # [Style] Clean Look
+        self.spin_top_k.setObjectName("clean_spin")
+        self.spin_top_k.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.spin_top_k.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons) # Explicitly remove buttons too 
+        
+        # Init value
+        val_max_det = self.saved_config.get('max_det', cfg.get('defaults', 'max_det') or 20)
+        self.slider_max_det.setValue(int(val_max_det))
+        self.spin_top_k.setValue(int(val_max_det))
+        
+        # Sync
+        self.slider_max_det.valueChanged.connect(self.spin_top_k.setValue)
+        self.spin_top_k.valueChanged.connect(self.slider_max_det.setValue)
+        
+        # Add to Grid directly (Col 1 for Slider, Col 2 for SpinBox)
+        l_det.addWidget(self.slider_max_det, 4, 1)
+        l_det.addWidget(self.spin_top_k, 4, 2)
         
         # [Fix] Stretch slider column to fill 800-1000px width
         l_det.setColumnStretch(1, 1)
@@ -255,44 +280,40 @@ class AdetailerUnitWidget(QWidget):
         elif '위에서 아래' in saved_sort: self.radio_sort_tb.setChecked(True)
         else: self.radio_sort_conf.setChecked(True)
 
-        radio_style = "QRadioButton { font-size: 11px; padding: 1px; }" # Slightly smaller for grid
-        chk_style = "QCheckBox { font-size: 12px; padding: 2px; }"
-        
-        for r in [self.radio_sort_lr, self.radio_sort_rl, self.radio_sort_center, self.radio_sort_area, self.radio_sort_tb, self.radio_sort_bt, self.radio_sort_conf]:
-            r.setStyleSheet(radio_style)
-            
-        self.chk_ignore_edge.setStyleSheet(chk_style)
-        self.chk_anatomy.setStyleSheet(chk_style)
-        self.chk_pose_rotation.setStyleSheet(chk_style + " color: #8e44ad; font-weight: bold;")
+        # [Ref] Removed manual loop for StyleSheet - handled by Global ModernTheme
+        # Properties/IDs set if needed, but defaults are fine.
 
-        # [Ref] Unified Sort & Filter Group (Vertical Stack for 460px)
-        g_sort_filter = QGroupBox("정렬 배치 및 필터")
-        l_sf = QVBoxLayout()
-        l_sf.setContentsMargins(5, 5, 5, 5)
+        # [Ref] Unified Sort & Filter Group (Single Row Compact)
+        g_sort_filter = QGroupBox("정렬/필터")
+        l_sf = QHBoxLayout()
+        l_sf.setContentsMargins(5, 5, 5, 2) # Top margin for title space
+        l_sf.setSpacing(6)
         
-        # 1. Sort Grid
-        l_sort_grid = QGridLayout()
-        # Row 0
-        l_sort_grid.addWidget(self.radio_sort_lr, 0, 0)
-        l_sort_grid.addWidget(self.radio_sort_rl, 0, 1)
-        l_sort_grid.addWidget(self.radio_sort_center, 0, 2)
-        l_sort_grid.addWidget(self.radio_sort_conf, 0, 3)
-        # Row 1
-        l_sort_grid.addWidget(self.radio_sort_tb, 1, 0)
-        l_sort_grid.addWidget(self.radio_sort_bt, 1, 1)
-        l_sort_grid.addWidget(self.radio_sort_area, 1, 2)
+        # Sort Group 1: Horizontal
+        l_sf.addWidget(self.radio_sort_lr)
+        l_sf.addWidget(self.radio_sort_rl)
+        l_sf.addWidget(self.radio_sort_center)
         
-        l_sf.addLayout(l_sort_grid)
+        l_sf.addWidget(QLabel("|")) # Separator
         
-        # 2. Checkboxes
-        l_chks = QHBoxLayout()
-        l_chks.addWidget(self.chk_ignore_edge)
-        l_chks.addWidget(self.chk_anatomy)
-        l_chks.addStretch()
-        l_sf.addLayout(l_chks)
+        # Sort Group 2: Vertical
+        l_sf.addWidget(self.radio_sort_tb)
+        l_sf.addWidget(self.radio_sort_bt)
         
-        # Pose Rotation (Long text, own line)
+        l_sf.addWidget(QLabel("|")) # Separator
+        
+        # Sort Group 3: Misc
+        l_sf.addWidget(self.radio_sort_area)
+        l_sf.addWidget(self.radio_sort_conf)
+        
+        l_sf.addWidget(QLabel("|")) # Separator
+        
+        # Filters
+        l_sf.addWidget(self.chk_ignore_edge)
+        l_sf.addWidget(self.chk_anatomy)
         l_sf.addWidget(self.chk_pose_rotation)
+        
+        l_sf.addStretch() # Fill remaining space
 
         # [Fix] Set layout for the group box
         g_sort_filter.setLayout(l_sf)
@@ -456,7 +477,7 @@ class AdetailerUnitWidget(QWidget):
         l_opts.addWidget(QLabel("병합:"))
         l_opts.addWidget(self.combo_mask_merge)
         
-        self.combo_color_fix = QComboBox(); self.combo_color_fix.addItems(["None", "Wavelet", "Adain"])
+        self.combo_color_fix = QComboBox(); self.combo_color_fix.addItems(["None", "Wavelet", "Adain", "Histogram", "Linear"])
         self.combo_color_fix.setCurrentText(self.saved_config.get('color_fix', "None"))
         l_opts.addWidget(QLabel("색감:"))
         l_opts.addWidget(self.combo_color_fix)
@@ -924,9 +945,13 @@ class AdetailerUnitWidget(QWidget):
         
         # [New] Restore Strength Slider (Row 4)
         def_restore = cfg.get('defaults', 'restore_face_strength') or 1.0
-        # Use a full row for the slider to align with 1-column style
         self.add_slider_row(l_adv, 4, "얼굴복원강도:", "restore_face_strength", 0.0, 1.0, 
-                            def_restore, 0.05, start_col=0)
+                            self.saved_config.get('restore_face_strength', def_restore), 0.05, start_col=0)
+        
+        # [New] Post Sharpen Slider (Row 5)
+        def_sharpen = cfg.get('defaults', 'post_sharpen') or 0.3
+        self.add_slider_row(l_adv, 5, "후처리 선명도:", "post_sharpen", 0.0, 1.5, 
+                            self.saved_config.get('post_sharpen', def_sharpen), 0.05, start_col=0)
         
         g_adv.setLayout(l_adv)
         t4_layout.addWidget(g_adv)
@@ -1040,6 +1065,8 @@ class AdetailerUnitWidget(QWidget):
         spin.setSingleStep(step)
         # [Fix] Fixed Spinbox Width (User Requested 70px)
         spin.setFixedWidth(70) 
+        spin.setObjectName("clean_spin")
+        spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         spin.setValue(loaded_val)
         slider.setValue(int(loaded_val * scale))
@@ -1387,6 +1414,8 @@ class AdetailerUnitWidget(QWidget):
             'dd_fade': self.slider_dd_fade.value() / 100.0,
             'dd_smooth': self.chk_dd_smooth.isChecked(),
             'dd_mode': self.combo_dd_mode.currentText(),
+            'post_sharpen': self.settings['post_sharpen']['widget'].value(),
+            'restore_face_strength': self.settings['restore_face_strength']['widget'].value(),
         }
 
         # 슬라이더 값들 병합 (Max Face Ratio 등 포함)

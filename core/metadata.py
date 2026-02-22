@@ -6,13 +6,12 @@ core/metadata.py
 """
 
 import os
-import json
 import cv2
 import numpy as np
-from PIL import Image, PngImagePlugin, ImageOps
-import piexif
-import piexif.helper
+from PIL import Image, PngImagePlugin
 from core.io_utils import imwrite
+
+
 
 def load_image_as_pil(image_path):
     """
@@ -27,10 +26,12 @@ def load_image_as_pil(image_path):
         print(f"[Metadata] 이미지 로드 실패: {e}")
         return None
 
-def save_image_with_metadata(cv2_image, original_path, save_path, config):
+def save_image_with_metadata(cv2_image, original_path, save_path):
+
     """
     OpenCV 이미지(결과물)를 받아 PIL로 변환 후,
-    원본의 EXIF를 이식하고 ADetailer 호환 로그를 심어서 저장합니다.
+    원본의 EXIF/ICC/XMP 등을 그대로 보존하여 저장합니다.
+    (더 이상 ADetailer 파라미터나 Software 태그를 추가하지 않습니다)
     """
     try:
         # 1. OpenCV(BGR) -> PIL(RGB) 변환
@@ -38,34 +39,16 @@ def save_image_with_metadata(cv2_image, original_path, save_path, config):
             color_converted = cv2.cvtColor(cv2_image, cv2.COLOR_BGR2RGB)
             pil_image = Image.fromarray(color_converted)
         else:
-            pil_image = cv2_image # 이미 PIL이면 그대로 사용
+            pil_image = cv2_image
+
 
         # 2. 메타데이터 준비 (PNG Info)
         metadata = PngImagePlugin.PngInfo()
         
-        # 3. ADetailer 스타일의 파라미터 텍스트 생성
-        ad_params = config.to_adetailer_json()
-        pos = ad_params.get("pos_prompt", "")
-        neg = ad_params.get("neg_prompt", "")
-        
-        exclude_keys = ["pos_prompt", "neg_prompt"]
-        other_params = [f"ADetailer {k}: {v}" for k, v in ad_params.items() if k not in exclude_keys]
-        
-        lines = []
-        if pos: lines.append(f"ADetailer prompt: \"{pos}\"")
-        if neg: lines.append(f"ADetailer negative prompt: \"{neg}\"")
-        if other_params:
-            lines.append(", ".join(other_params))
-            
-        added_param_text = "\n".join(lines)
-        
-        # 4. 원본 메타데이터/ICC 프로필 보존 및 병합
+        # 3. 원본 메타데이터/ICC 프로필 보존
         exif_bytes = b""
         icc_profile = None
-        final_param_text = added_param_text # 기본값
-        
-        # EXIF 딕셔너리 기본값
-        exif_dict = {"0th":{}, "Exif":{}, "GPS":{}, "1st":{}, "thumbnail":None}
+        info_to_preserve = {}
         
         try:
             if os.path.exists(original_path):
@@ -74,70 +57,55 @@ def save_image_with_metadata(cv2_image, original_path, save_path, config):
                 # A. ICC Profile Preservation
                 icc_profile = original_pil.info.get("icc_profile")
                 
-                # B. PNG Info Merge (parameters)
+                # B. PNG Info preservation (excluding parameters and internal tags)
+                # Note: We used to merge parameters here, now we just keep original if present
                 existing_params = original_pil.info.get("parameters", "")
                 if existing_params:
-                    # 기존 내용 뒤에 새로운 파라미터를 덧붙임
-                    final_param_text = f"{existing_params}\n\n{added_param_text}"
+                     metadata.add_text("parameters", existing_params)
                 
-                # C. Other PNG Chunks
-                for k, v in original_pil.info.items():
-                    if k in ["exif", "parameters", "icc_profile"]: continue
-                    if isinstance(k, str) and isinstance(v, str):
-                        metadata.add_text(k, v)
+                # C. XMP and other metadata chunks preservation
+                xmp_data = original_pil.info.get("XML:com.adobe.xmp") or original_pil.info.get("xmp")
+                if xmp_data:
+                    info_to_preserve["XML:com.adobe.xmp"] = xmp_data
 
-                # D. EXIF Preservation & Update
+                for k, v in original_pil.info.items():
+                    if k in ["exif", "parameters", "icc_profile", "XML:com.adobe.xmp", "xmp"]:
+                        continue
+                    if isinstance(k, str) and (isinstance(v, str) or isinstance(v, bytes)):
+                        # metadata.add_text(str(k), str(v)) # Handled in the final loop for consistency
+                        info_to_preserve[k] = v
+
+
+                # D. EXIF Preservation
                 raw_exif = original_pil.info.get("exif")
-                if raw_exif:
+                if not raw_exif and hasattr(original_pil, 'getexif'):
                     try:
-                        exif_dict = piexif.load(raw_exif)
-                        
-                        # Update Software
-                        exif_dict["0th"][piexif.ImageIFD.Software] = "ObjectDetailer_Ultimate"
-                        
-                        # UserComment Merge
-                        raw_comment = exif_dict["Exif"].get(piexif.ExifIFD.UserComment)
-                        existing_comment = ""
-                        if raw_comment:
-                            try:
-                                existing_comment = piexif.helper.UserComment.load(raw_comment)
-                            except: pass
-                        
-                        if existing_comment:
-                            merged_comment = f"{existing_comment}\n\n{added_param_text}"
-                        else:
-                            merged_comment = added_param_text
-                            
-                        exif_dict["Exif"][piexif.ExifIFD.UserComment] = piexif.helper.UserComment.dump(merged_comment, encoding="unicode")
-                        exif_bytes = piexif.dump(exif_dict)
-                        
-                    except Exception as e:
-                        print(f"[Metadata] EXIF Parsing/Update Failed: {e}. Falling back to overwrite.")
-                        exif_dict = {"0th":{}, "Exif":{}, "GPS":{}, "1st":{}, "thumbnail":None}
-                        exif_dict["0th"][piexif.ImageIFD.Software] = "ObjectDetailer_Ultimate"
-                        exif_dict["Exif"][piexif.ExifIFD.UserComment] = piexif.helper.UserComment.dump(added_param_text, encoding="unicode")
-                        exif_bytes = piexif.dump(exif_dict)
-                else:
-                    # 원본 EXIF가 없으면 새로 생성
-                    exif_dict["0th"][piexif.ImageIFD.Software] = "ObjectDetailer_Ultimate"
-                    exif_dict["Exif"][piexif.ExifIFD.UserComment] = piexif.helper.UserComment.dump(added_param_text, encoding="unicode")
-                    exif_bytes = piexif.dump(exif_dict)
+                        raw_exif = original_pil.getexif().tobytes()
+                    except Exception:
+                        pass
+
+
+                if raw_exif:
+                    # We NO LONGER update Software or UserComment here.
+                    # Just keep the raw bytes.
+                    exif_bytes = raw_exif
+
 
         except Exception as e:
             print(f"[Metadata] Failed to process original metadata: {e}")
-            exif_dict["0th"][piexif.ImageIFD.Software] = "ObjectDetailer_Ultimate"
-            exif_dict["Exif"][piexif.ExifIFD.UserComment] = piexif.helper.UserComment.dump(added_param_text, encoding="unicode")
-            exif_bytes = piexif.dump(exif_dict)
 
-        # 5. PNG parameters 청크 최종 기록
-        metadata.add_text("parameters", final_param_text)
-        metadata.add_text("Software", "ObjectDetailer_Ultimate")
-        metadata.add_text("Comment", json.dumps(ad_params))
+        # 4. Preserve other info markers (XMP etc)
+        for k, v in info_to_preserve.items():
+            try:
+                if isinstance(v, bytes):
+                    metadata.add_text(str(k), v.decode('latin-1'), zip=True)
+                else:
+                    metadata.add_text(str(k), str(v), zip=True)
+            except Exception:
+                pass
+
         
-        # 6. 저장 실행
-        # pnginfo: PNG 텍스트 청크
-        # exif: JPEG/PNG Exif 청크
-        # icc_profile: 색상 프로필
+        # 5. 저장 실행
         pil_image.save(save_path, pnginfo=metadata, exif=exif_bytes, icc_profile=icc_profile, quality=95)
             
         return True
@@ -146,4 +114,5 @@ def save_image_with_metadata(cv2_image, original_path, save_path, config):
         print(f"[Metadata] 저장 실패 ({save_path}): {e}")
         # 실패 시 비상용으로 OpenCV 저장 시도 (메타데이터는 포기)
         imwrite(save_path, cv2_image)
+
         return False

@@ -85,11 +85,12 @@ def align_and_crop(image, bbox, kps=None, target_size=512, padding=0.25, force_r
     반환값: cropped_img, M (변환행렬)
     """
     x1, y1, x2, y2 = map(int, bbox)
-    w, h = x2 - x1, y2 - y1
+    w, h = max(1, x2 - x1), max(1, y2 - y1)
     cx, cy = x1 + w // 2, y1 + h // 2
     
     # 패딩 적용한 크기
     crop_size = int(max(w, h) * (1 + padding))
+    crop_size = max(1, crop_size) # Division by zero protection
     
     angle = 0.0
     if force_rotate and kps is not None:

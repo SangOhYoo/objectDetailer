@@ -49,7 +49,8 @@ class AppConfig:
                 "vae": "D:/AI_Models/VAE",
                 "lora": "D:/AI_Models/Lora",
                 "controlnet": "D:/AI_Models/ControlNet",
-                "gfpgan": "D:/AI_Models/GFPGAN"
+                "gfpgan": "D:/AI_Models/GFPGAN",
+                "esrgan": "D:/AI_Models/ESRGAN"
             },
             "files": {
                 "checkpoint_file": "ultra_v7.safetensors",
@@ -117,7 +118,11 @@ class AppConfig:
                 # [New] Canvas Expansion Defaults
                 "resize_enable": False,
                 "resize_ratio": 0.6,
-                "resize_align": "Center"
+                "resize_align": "Center",
+                
+                # [New] Auto-Prompting Defaults
+                "auto_prompting": True,
+                "interrogator_threshold": 0.35
             },
             "ui_settings": {}  # For prompt persistence
         }

@@ -162,42 +162,18 @@ class ObjectDetector:
             infer_sz = 640
             if "1024" in model_name: infer_sz = 1024
             if "1280" in model_name: infer_sz = 1280
-            print(f"[Detector] Inference Resolution: {infer_sz}")
-
+            
             with no_dispatch():
                 results = model.predict(image, conf=conf, device=device_arg, verbose=False, classes=target_classes_arg, imgsz=infer_sz)
         except (NotImplementedError, RuntimeError) as e:
-            # [Fix] Meta tensor error handling (accelerate conflict)
+            # Conflict with accelerate / Meta tensor errors (especially for YOLOv10/v11)
             print(f"[Detector] Warning: Inference failed ({e}). Attempting CPU fallback for {model_name}.")
-            
-            # Reload model to recover from broken state (Meta device)
-            if model_name in self.yolo_models:
-                del self.yolo_models[model_name]
-            
-            filename = model_name if model_name.endswith('.pt') else f"{model_name}.pt"
-            model_path = os.path.join(self.model_dir, filename)
-            load_target = model_path if os.path.exists(model_path) else filename
-            
-            # [Fix] Simply reload model from path to recover from Meta tensor error
             try:
-                # Threading fix for fallback as well
-                fallback_result = {}
-                def _reload_yolo():
-                    fallback_result['model'] = YOLO(load_target)
-                t = threading.Thread(target=_reload_yolo)
-                t.start()
-                t.join()
-                model = fallback_result.get('model')
-            except Exception as e:
-                print(f"[Detector] CPU Reload failed: {e}")
-                return []
-
-            self.yolo_models[model_name] = model
-            try:
-                with no_dispatch():
-                    results = model.predict(image, conf=conf, device='cpu', verbose=False)
-            except Exception as e:
-                print(f"[Detector] CPU inference also failed (Skipping detection): {e}")
+                # Reload model on CPU
+                cpu_model = YOLO(model.ckpt_path if hasattr(model, 'ckpt_path') else model_name)
+                results = cpu_model.predict(image, conf=conf, device='cpu', verbose=False, classes=target_classes_arg, imgsz=infer_sz)
+            except Exception as e2:
+                print(f"[Detector] Error: CPU Fallback also failed: {e2}")
                 return []
 
         detections = []
@@ -209,10 +185,7 @@ class ObjectDetector:
             masks = None
             if result.masks is not None and hasattr(result.masks, 'data'):
                 masks = result.masks.data.cpu().numpy()
-                print(f"[Detector] Masks Found! shape: {masks.shape}")
-            else:
-                print(f"[Detector] No masks in result. result.masks: {result.masks}")
-
+            
             for i, box in enumerate(boxes):
                 x1, y1, x2, y2 = map(int, box)
                 det = {
@@ -221,8 +194,7 @@ class ObjectDetector:
                     'label': int(cls_ids[i]),
                     'mask': None
                 }
-                
-                # [New] Inject Class Name
+                # Inject Class Name
                 if hasattr(model, 'names') and det['label'] in model.names:
                     det['label_name'] = model.names[det['label']]
                 else:
@@ -234,14 +206,17 @@ class ObjectDetector:
                     if raw_mask.shape[:2] != image.shape[:2]:
                         raw_mask = cv2.resize(raw_mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
                     det['mask'] = (raw_mask > 0.5).astype(np.uint8) * 255
-
+                
                 detections.append(det)
-
-        # [Debug] Log detections
-        print(f"[Detector] Model: {model_name} | Detected: {len(detections)} objects")
-        for i, det in enumerate(detections):
-            print(f"  - [{i+1}] Class: {det.get('label_name')} ({det['label']}), Conf: {det['conf']:.4f}, Box: {det['box']}")
         
+        # [Log] Detailed detection results
+        if detections:
+            print(f"[Detector] {model_name}: Found {len(detections)} objects.")
+            for i, d in enumerate(detections):
+                print(f"  #{i+1}: {d['label_name']} ({d['conf']:.2f}) at {d['box']}")
+        else:
+            print(f"[Detector] {model_name}: No objects found (Conf: {conf}).")
+
         return detections
 
     def _detect_mediapipe(self, image, model_name):

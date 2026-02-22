@@ -8,8 +8,6 @@ set "PROJECT_NAME=ObjectDetailer_Ultimate"
 set "VENV_DIR=venv"
 
 :: NOTE: We use absolute path for python exec later to avoid 'call activate' issues
-set "PYTHON_EXEC=python"
-
 set "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:128"
 :: [Dual GPU Optimization] Limit CPU core usage per worker to avoid bottlenecks
 set "OMP_NUM_THREADS=1"
@@ -21,29 +19,55 @@ echo ================================================================
 echo  🚀 %PROJECT_NAME% Launcher
 echo ================================================================
 
-:: 1. Check and Create Virtual Environment (venv)
+:: 1. Detect Base Python
+set "BASE_PYTHON=python"
+
+:: Check if python is available
+%BASE_PYTHON% --version >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Python not found. Please install Python 3.10 or later.
+    pause
+    exit /b
+)
+
+:: 2. Check and Create Virtual Environment (venv)
+set "RECREATE_VENV=0"
+
+if exist "%VENV_DIR%" (
+    :: Verify if the venv's python executable still exists and works
+    if not exist "%VENV_DIR%\Scripts\python.exe" (
+        echo [WARNING] Virtual environment is broken (Scripts\python.exe missing^).
+        set RECREATE_VENV=1
+    ) else (
+        "%VENV_DIR%\Scripts\python.exe" --version >nul 2>&1
+        if errorlevel 1 (
+            echo [WARNING] Virtual environment is broken (Python executable failed^).
+            set RECREATE_VENV=1
+        )
+    )
+    
+    if "!RECREATE_VENV!"=="1" (
+        echo [INFO] Removing corrupted virtual environment...
+        rmdir /s /q "%VENV_DIR%"
+    )
+)
+
 if not exist "%VENV_DIR%" (
-    echo [INFO] Virtual environment folder '%VENV_DIR%' not found. Creating new one...
-    %PYTHON_EXEC% -m venv %VENV_DIR%
+    echo [INFO] Creating new virtual environment...
+    %BASE_PYTHON% -m venv %VENV_DIR%
     
     if errorlevel 1 (
-        echo [ERROR] Failed to create virtual environment. Check if Python 3.10+ is installed.
+        echo [ERROR] Failed to create virtual environment using %BASE_PYTHON%.
+        echo Please ensure Python 3.10+ is installed and in your PATH.
         pause
         exit /b
     )
     echo [INFO] Virtual environment created.
 )
 
-:: 2. Activate Virtual Environment
-:: Instead of 'call activate', we point directly to the venv executable.
+:: 3. Set Python Executable Path
 set "PYTHON_EXEC=%CD%\%VENV_DIR%\Scripts\python.exe"
 
-:: 2.1 Verify Python Executable
-if not exist "%PYTHON_EXEC%" (
-    echo [ERROR] Python executable not found: %PYTHON_EXEC%
-    pause
-    exit /b
-)
 
 :: Update pip and setuptools (Ensure stability)
 %PYTHON_EXEC% -m pip install --upgrade pip setuptools

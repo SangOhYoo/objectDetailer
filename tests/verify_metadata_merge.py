@@ -39,10 +39,11 @@ def verify_metadata():
     create_test_image(input_path, original_params)
     
     test_img = np.zeros((100, 100, 3), dtype=np.uint8)
-    config = MockConfig()
+    test_img = np.zeros((100, 100, 3), dtype=np.uint8)
     
     print("Running save_image_with_metadata...")
-    save_image_with_metadata(test_img, input_path, output_path, config)
+    save_image_with_metadata(test_img, input_path, output_path)
+
     
     # Check output
     with Image.open(output_path) as out_img:

@@ -257,7 +257,11 @@ class FileQueueWidget(QWidget):
         toolbar.addWidget(self.btn_rot_reset)
         toolbar.addWidget(self.btn_rot_cw)
         
-        # Separator (Space)
+        # [New] Restart from Original Toggle
+        self.chk_restart_from_original = QCheckBox("원본 사용")
+        self.chk_restart_from_original.setToolTip("체크 시 수동 실행을 클릭하면 항상 원본 이미지에서 시작합니다.\n언체크 시 현재 메모리에 있는 결과에 누적하여 처리합니다.")
+        toolbar.addWidget(self.chk_restart_from_original)
+
         toolbar.addSpacing(10)
 
         self.btn_add = QPushButton("파일 추가")
@@ -429,6 +433,7 @@ class FileQueueWidget(QWidget):
             self.btn_rot_ccw.setStyleSheet(f"background-color: {ModernTheme.DARK_BTN_BG}; color: {ModernTheme.DARK_TEXT_MAIN}; border: 1px solid {ModernTheme.DARK_BORDER};")
             self.btn_rot_cw.setStyleSheet(f"background-color: {ModernTheme.DARK_BTN_BG}; color: {ModernTheme.DARK_TEXT_MAIN}; border: 1px solid {ModernTheme.DARK_BORDER};")
             self.btn_rot_reset.setStyleSheet(f"background-color: {ModernTheme.DARK_BTN_BG}; color: {ModernTheme.DARK_TEXT_MAIN}; border: 1px solid {ModernTheme.DARK_BORDER};")
+            self.chk_restart_from_original.setStyleSheet(f"color: {ModernTheme.DARK_TEXT_MAIN};")
         else:
             self.list_widget.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BG_INPUT}; border: 1px solid {ModernTheme.LIGHT_BORDER}; color: {ModernTheme.LIGHT_TEXT_MAIN};")
             self.btn_add.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BTN_BG}; color: {ModernTheme.LIGHT_TEXT_MAIN}; border: 1px solid {ModernTheme.LIGHT_BORDER};")
@@ -438,6 +443,7 @@ class FileQueueWidget(QWidget):
             self.btn_rot_ccw.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BTN_BG}; color: {ModernTheme.LIGHT_TEXT_MAIN}; border: 1px solid {ModernTheme.LIGHT_BORDER};")
             self.btn_rot_cw.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BTN_BG}; color: {ModernTheme.LIGHT_TEXT_MAIN}; border: 1px solid {ModernTheme.LIGHT_BORDER};")
             self.btn_rot_reset.setStyleSheet(f"background-color: {ModernTheme.LIGHT_BTN_BG}; color: {ModernTheme.LIGHT_TEXT_MAIN}; border: 1px solid {ModernTheme.LIGHT_BORDER};")
+            self.chk_restart_from_original.setStyleSheet(f"color: {ModernTheme.LIGHT_TEXT_MAIN};")
 
 # =========================================================
 # 4. 로그 콘솔 (기존 유지)

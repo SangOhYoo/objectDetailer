@@ -40,12 +40,8 @@ def verify_exif():
         create_test_image(test_input)
         
         # 2. Mock config
-        mock_config = MagicMock()
-        mock_config.to_adetailer_json.return_value = {
-            "pos_prompt": "verified face",
-            "neg_prompt": "blurry",
-            "steps": 25
-        }
+        
+
         
         # 3. Dummy processed image (OpenCV BGR format)
         cv2_image = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -53,7 +49,9 @@ def verify_exif():
         
         # 4. Call preservation logic
         print("Running save_image_with_metadata...")
-        success = save_image_with_metadata(cv2_image, test_input, test_output, mock_config)
+        print("Running save_image_with_metadata...")
+        success = save_image_with_metadata(cv2_image, test_input, test_output)
+
         
         if not success:
             print("FAILED: save_image_with_metadata returned False")
@@ -90,33 +88,42 @@ def verify_exif():
         assert decode(model) == "Test Model", f"Model mismatch: {decode(model)}"
         assert decode(copyright_tag) == "Test User", f"Copyright mismatch: {decode(copyright_tag)}"
         
-        # Check updated tags
+        # Check Software (Should be preserved, NOT updated)
         software = exif_dict["0th"].get(piexif.ImageIFD.Software)
         print(f"Software: {decode(software)}")
-        assert decode(software) == "ObjectDetailer_Ultimate", f"Software mismatch: {decode(software)}"
+        if decode(software) == "ObjectDetailer_Ultimate":
+             print("[FAIL] Software tag was overwritten!")
+             return False
+        assert decode(software) == "Original Software", f"Software mismatch: {decode(software)}"
+
         
         user_comment_bytes = exif_dict["Exif"].get(piexif.ExifIFD.UserComment)
-        user_comment = piexif.helper.UserComment.load(user_comment_bytes)
-        print(f"UserComment (full): {repr(user_comment)}")
+        if user_comment_bytes:
+            try:
+                user_comment = piexif.helper.UserComment.load(user_comment_bytes)
+                print(f"UserComment: {user_comment}")
+                
+                # Should preserve original
+                assert "Original Comment" in user_comment, "Original comment lost"
+                # Should NOT have new prompt
+                if "verified face" in user_comment:
+                    print("[FAIL] UserComment contains new prompt data (should be removed)")
+                    return False
+            except Exception as e:
+                print(f"Failed to load UserComment: {e}")
         
-        # Check substrings
-        has_prompt = "verified face" in user_comment
-        has_steps = "steps: 25" in user_comment
-        print(f"Has prompt: {has_prompt}")
-        print(f"Has steps: {has_steps}")
-        
-        assert has_prompt, f"UserComment missing prompt data. Got: {repr(user_comment)}"
-        assert has_steps, f"UserComment missing step data. Got: {repr(user_comment)}"
-        
-        # Check PNG Info (parameters)
+        # Check PNG Info (parameters) -> Should be EMPTY or just original if existed?
+        # Our input didn't have PNG parameters, only EXIF.
+        # So output parameters should be None or empty.
         params = out_info.get("parameters")
         print(f"PNG parameters: {repr(params)}")
-        assert params is not None, "PNG Info 'parameters' missing"
-        if params is not None:
-             assert "verified face" in params, "PNG parameters missing prompt"
+        if params is not None and "verified face" in params:
+             print("[FAIL] PNG parameters contain new prompt data!")
+             return False
         
         print("\n[VERIFICATION] SUCCESS: All EXIF and Metadata checks passed!")
         return True
+
 
     except Exception as e:
         print(f"\n[VERIFICATION] FAILED: {e}")

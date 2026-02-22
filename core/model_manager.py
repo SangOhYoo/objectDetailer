@@ -42,12 +42,19 @@ class ModelManager:
                 is_sdxl = True
 
         # ControlNet 경로 (인자가 없으면 config.yaml에서 로드)
-        # [Mod] ControlNet Tile 강제 사용 (설정 추론 에러 방지 및 안정성 확보)
-        if not controlnet_path and cfg.get_path('controlnet', 'controlnet_tile'):
-            if not is_sdxl:
-                controlnet_path = cfg.get_path('controlnet', 'controlnet_tile')
-            else:
-                print("[ModelManager] SDXL detected. Skipping default SD1.5 ControlNet Tile.")
+        # ControlNet 경로 (인자가 없으면 config.yaml에서 로드)
+        # [Mod] ControlNet Logic Update for Pose Guide and Tile
+        if not controlnet_path:
+            # 1. Check if specific path provided in args (already done via arg)
+            # 2. Check if this is a Pose Guide request? (ModelManager usually just loads what's asked)
+            # The caller (pipeline) determines which CN path to pass.
+            # But here we handle defaults if nothing passed.
+             
+            if cfg.get_path('controlnet', 'controlnet_tile'):
+                if not is_sdxl:
+                    controlnet_path = cfg.get_path('controlnet', 'controlnet_tile')
+                else:
+                    print("[ModelManager] SDXL detected. Skipping default SD1.5 ControlNet Tile.")
 
         # 현재 로드된 설정과 비교
         new_config = {
@@ -74,18 +81,24 @@ class ModelManager:
             controlnet = None
             if controlnet_path:
                 cn_path = controlnet_path
+                print(f"[ModelManager] Loading ControlNet: {os.path.basename(cn_path)}...")
+                
                 if cn_path and os.path.exists(cn_path) and os.path.isfile(cn_path):
                     try:
                         controlnet = ControlNetModel.from_single_file(cn_path, torch_dtype=torch.float32)
                     except Exception as e:
                         print(f"[ModelManager] Failed to load ControlNet from {cn_path}: {e}")
                 else:
+                    # Pretrained / HuggingFace ID
                     try:
                         target_path = cn_path
+                        # Handle specific repos
                         if "lllyasviel/control_v11f1e_sd15_tile" in cn_path.replace("\\", "/"):
                             target_path = "lllyasviel/control_v11f1e_sd15_tile"
-                            # [Fix] 이 모델은 safetensors가 없으므로 명시적으로 비활성화하여 에러 로그 방지
                             controlnet = ControlNetModel.from_pretrained(target_path, torch_dtype=torch.float32, use_safetensors=False)
+                        elif "openpose" in cn_path.lower():
+                            # OpenPose special handling if needed, or just standard load
+                            controlnet = ControlNetModel.from_pretrained(target_path, torch_dtype=torch.float32)
                         else:
                             controlnet = ControlNetModel.from_pretrained(target_path, torch_dtype=torch.float32)
                     except Exception as e:
@@ -147,35 +160,44 @@ class ModelManager:
                     self.pipe = StableDiffusionControlNetInpaintPipeline(**self.pipe.components, controlnet=controlnet)
 
             # Clip Skip 적용
-            if not is_sdxl and clip_skip > 1 and hasattr(self.pipe, 'text_encoder'):
-                # Diffusers 방식: 레이어 슬라이싱
-                # Clip Skip 2 means removing the last 1 layer (using the 2nd to last)
-                self.pipe.text_encoder.text_model.encoder.layers = self.pipe.text_encoder.text_model.encoder.layers[:-(clip_skip - 1)]
+            if clip_skip > 1:
+                if is_sdxl:
+                    # SDXL: Apply to both encoders (Standard approach for Pony/XL LoRAs)
+                    if hasattr(self.pipe, 'text_encoder'):
+                        self.pipe.text_encoder.text_model.encoder.layers = self.pipe.text_encoder.text_model.encoder.layers[:-(clip_skip - 1)]
+                    if hasattr(self.pipe, 'text_encoder_2'):
+                        self.pipe.text_encoder_2.text_model.encoder.layers = self.pipe.text_encoder_2.text_model.encoder.layers[:-(clip_skip - 1)]
+                    print(f"[ModelManager] Applied Clip Skip {clip_skip} to SDXL encoders.")
+                elif hasattr(self.pipe, 'text_encoder'):
+                    # SD 1.5
+                    self.pipe.text_encoder.text_model.encoder.layers = self.pipe.text_encoder.text_model.encoder.layers[:-(clip_skip - 1)]
+                    print(f"[ModelManager] Applied Clip Skip {clip_skip} to SD 1.5 encoder.")
 
             # [Fix] OOM 방지를 위한 메모리 최적화 및 Offload 적용
             # 1. 데이터 타입 변환 (fp16) - 로딩 후 변환
             if use_float16:
-                 if hasattr(self.pipe, "unet"): self.pipe.unet.to(dtype=torch.float16)
-                 if hasattr(self.pipe, "text_encoder"): self.pipe.text_encoder.to(dtype=torch.float16)
-                 if hasattr(self.pipe, "text_encoder_2"): self.pipe.text_encoder_2.to(dtype=torch.float16)
-                 if controlnet: self.pipe.controlnet.to(dtype=torch.float16)
+                if hasattr(self.pipe, "unet"): self.pipe.unet.to(dtype=torch.float16)
+                if hasattr(self.pipe, "text_encoder"): self.pipe.text_encoder.to(dtype=torch.float16)
+                if hasattr(self.pipe, "text_encoder_2"): self.pipe.text_encoder_2.to(dtype=torch.float16)
+                if controlnet: self.pipe.controlnet.to(dtype=torch.float16)
             # self.pipe.unet.to(dtype=torch.float16)
             # self.pipe.text_encoder.to(dtype=torch.float16)
             # if controlnet: self.pipe.controlnet.to(dtype=torch.float16)
             if self.pipe.vae: 
+                # [Fix] Forced float32 VAE to prevent NaNs/Black images in SDXL
                 self.pipe.vae.to(dtype=torch.float32)
-                # [Fix] Pipeline이 float16일 때 VAE 입력도 float16으로 캐스팅되어 float32 VAE와 충돌(Input Half != Weight Float)하는 문제 해결
-                # VAE Encoder 실행 직전에 입력을 강제로 float32로 변환하는 Hook 추가
-                def vae_cast_hook(module, inputs):
-                    if inputs[0].dtype != torch.float32:
-                        return (inputs[0].to(dtype=torch.float32),) + inputs[1:]
                 
-                # 중복 등록 방지
+                def vae_cast_hook(module, inputs):
+                    if not inputs or not isinstance(inputs[0], torch.Tensor):
+                        return inputs
+                    t_in = inputs[0]
+                    if t_in.dtype != torch.float32:
+                        return (t_in.to(dtype=torch.float32),) + inputs[1:]
+                    return inputs
+                
                 if not hasattr(self.pipe.vae.encoder, "_antigravity_hook_registered"):
                     self.pipe.vae.encoder.register_forward_pre_hook(vae_cast_hook)
                     self.pipe.vae.encoder._antigravity_hook_registered = True
-                
-                # Add logic for decoder using the same logic just in case
                 if not hasattr(self.pipe.vae.decoder, "_antigravity_hook_registered"):
                     self.pipe.vae.decoder.register_forward_pre_hook(vae_cast_hook)
                     self.pipe.vae.decoder._antigravity_hook_registered = True
@@ -190,10 +212,19 @@ class ModelManager:
                 self.pipe.enable_attention_slicing()
 
             # 3. VAE Tiling (고해상도 OOM 방지)
-            if hasattr(self.pipe.vae, 'enable_tiling'):
-                self.pipe.vae.enable_tiling()
-            elif hasattr(self.pipe, 'enable_vae_tiling'):
-                self.pipe.enable_vae_tiling()
+            # [Fix] Only enable tiling if resolution is VERY high (e.g., > 1536) 
+            # Small images (< 1024) often trigger 0-element reshape errors 
+            # in some diffusers/tiled_decode implementations when combined with offload.
+            def enable_tiling_safe(pipe):
+                # We won't enable it by default here anymore. 
+                # Instead, we will enable it dynamically in pipeline.py if needed,
+                # or just disable it for SD 1.5 which usually doesn't need it for faces.
+                pass
+                
+            # For SDXL, we might still want it, but let's be conservative.
+            # Decision: Disable by default in ModelManager, enable in Pipeline based on res.
+            if hasattr(self.pipe.vae, 'disable_tiling'):
+                self.pipe.vae.disable_tiling()
 
             # 4. CPU Offload 활성화 (Standard)
             # [Fix] 모든 모델에 대해 enable_model_cpu_offload 사용
@@ -243,12 +274,13 @@ class ModelManager:
 
     def manage_lora(self, lora_list, action="load"):
         """LoRA 주입 및 해제"""
-        if not self.pipe or not lora_list: return
+        if not self.pipe: return
         
         lora_base = cfg.get_path('lora')
         if not lora_base: return
         
-        # None 처리
+        # [Fix] Do not return early if lora_list is empty. 
+        # We need to proceed to check if previous LoRAs need to be unloaded.
         if lora_list is None: lora_list = []
 
         try:
@@ -318,7 +350,8 @@ class ModelManager:
                  
                  for root, dirs, files in os.walk(lora_base):
                      for f in files:
-                         if f.lower().startswith(search_name.lower()):
+                          # [Improvement] Use containment check instead of startswith for better flexibility
+                          if search_name.lower() in f.lower():
                              # Check exact match or with extension
                              f_no_ext = os.path.splitext(f)[0]
                              if f_no_ext.lower() == search_name.lower():
@@ -342,7 +375,7 @@ class ModelManager:
                     # [Fix] 1x1 Conv vs Linear dimension mismatch fallback
                     err_msg = str(e)
                     if "size mismatch" in err_msg and "1, 1" in err_msg:
-                        print(f"[ModelManager] Warning: Dimension mismatch for {name}. Skipping to avoid crash.")
+                        print(f"[ModelManager] Warning: Dimension mismatch for {name} (Possibly SD1.5 LoRA + SDXL Model). Skipping.")
                         continue
                         
                     # [Fix] Meta Tensor Error Handling (accelerate conflict)

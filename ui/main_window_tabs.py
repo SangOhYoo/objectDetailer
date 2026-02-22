@@ -11,6 +11,7 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from core.detail_daemon import make_schedule
 from ui.graph_widget import ScheduleGraphWidget
 from ui.styles import ModernTheme
+from ui.components import FileQueueWidget
 
 class AdetailerUnitWidget(QWidget):
     # [Signal] Request Main Window to run detection preview
@@ -59,7 +60,7 @@ class AdetailerUnitWidget(QWidget):
         
         self.chk_enable = QCheckBox(f"활성화 ({self.unit_name})") # Shortened label
         self.chk_enable.setObjectName("important_chk")
-        self.chk_enable.setChecked(self.saved_config.get('enabled', ("1" in self.unit_name)))
+        self.chk_enable.setChecked(bool(self.saved_config.get('enabled', ("1" in self.unit_name))))
         row1_layout.addWidget(self.chk_enable)
         
         # Mode Radios
@@ -75,10 +76,20 @@ class AdetailerUnitWidget(QWidget):
         row1_layout.addWidget(self.radio_yolo)
         row1_layout.addWidget(self.radio_sam)
         
-        # Auto Prompt (Moved up)
-        self.chk_auto_prompt = QCheckBox("✨ 자동 프롬프트")
-        self.chk_auto_prompt.setChecked(self.saved_config.get('auto_prompt_injection', True))
+        # Auto Interrogate (WD14)
+        self.chk_auto_interrogate = QCheckBox("🔍 자동 분석 (WD14)")
+        self.chk_auto_interrogate.setToolTip("WD14 Tagger를 사용하여 탐지된 객체를 분석하고 프롬프트를 자동 생성합니다.")
+        self.chk_auto_interrogate.setChecked(bool(self.saved_config.get('auto_prompting', True)))
+        row1_layout.addWidget(self.chk_auto_interrogate)
+        
+        # [New] Auto Prompt Injection (Quality)
+        self.chk_auto_prompt = QCheckBox("✨ 품질 보정 (Quality)")
+        self.chk_auto_prompt.setToolTip("인페인팅 프롬프트에 'high quality, detailed' 등의 품질 키워드를 자동으로 추가합니다.")
+        self.chk_auto_prompt.setChecked(bool(self.saved_config.get('auto_prompt_injection', True)))
         row1_layout.addWidget(self.chk_auto_prompt)
+        
+        # Interrogator Threshold
+        self.add_slider_row_manual(row1_layout, "Thresh:", "interrogator_threshold", 0.0, 1.0, 0.35, 0.05)
         
         row1_layout.addStretch()
         
@@ -171,6 +182,7 @@ class AdetailerUnitWidget(QWidget):
         top_layout.addWidget(self.txt_pos, 2)
         top_layout.addWidget(self.txt_neg, 1)
         
+        
         top_group.setLayout(top_layout)
         self.main_layout.addWidget(top_group)
 
@@ -199,14 +211,14 @@ class AdetailerUnitWidget(QWidget):
         self.combo_gender.setCurrentText("All" if saved_gender=="All" else saved_gender)
         
         self.chk_ignore_edge = QCheckBox("Edge무시")
-        self.chk_ignore_edge.setChecked(self.saved_config.get('ignore_edge_touching', False))
+        self.chk_ignore_edge.setChecked(bool(self.saved_config.get('ignore_edge_touching', False)))
         self.chk_anatomy = QCheckBox("해부학")
-        self.chk_anatomy.setChecked(self.saved_config.get('anatomy_check', True))
+        self.chk_anatomy.setChecked(bool(self.saved_config.get('anatomy_check', True)))
         
         # [New] Pose Rotation (Lying Body)
         self.chk_pose_rotation = QCheckBox("Pose회전")
         self.chk_pose_rotation.setToolTip("YOLO Pose를 사용하여 누워있는 신체의 머리 방향을 감지하고 회전합니다.")
-        self.chk_pose_rotation.setChecked(self.saved_config.get('use_pose_rotation', False))
+        self.chk_pose_rotation.setChecked(bool(self.saved_config.get('use_pose_rotation', False)))
         self.chk_pose_rotation.setObjectName("purple_chk")
 
         l_det.addWidget(QLabel("성별:"), 0, 0)
@@ -462,6 +474,16 @@ class AdetailerUnitWidget(QWidget):
         self.spin_inpaint_h.setValue(saved_h if saved_h > 0 else global_res)
         
         l_res.addWidget(self.spin_inpaint_w); l_res.addWidget(QLabel("x")); l_res.addWidget(self.spin_inpaint_h)
+        
+        # [New] Max Detailing Resolution
+        l_res.addSpacing(10)
+        l_res.addWidget(QLabel("최대:"))
+        self.spin_max_res = QSpinBox(); self.spin_max_res.setRange(512, 3072); self.spin_max_res.setSingleStep(64)
+        def_max = cfg.get('defaults', 'max_resolution') or 1024
+        self.spin_max_res.setValue(self.saved_config.get('max_det_res', def_max))
+        self.spin_max_res.setToolTip("Dynamic Escalation 시의 최대 해상도를 제한합니다. (VRAM 절약)")
+        l_res.addWidget(self.spin_max_res)
+        
         l_inp.addLayout(l_res, 5, 0, 1, 3)
         
         # 5. Options (Merge, Color, Rotate)
@@ -477,13 +499,13 @@ class AdetailerUnitWidget(QWidget):
         l_opts.addWidget(QLabel("병합:"))
         l_opts.addWidget(self.combo_mask_merge)
         
-        self.combo_color_fix = QComboBox(); self.combo_color_fix.addItems(["None", "Wavelet", "Adain", "Histogram", "Linear"])
+        self.combo_color_fix = QComboBox(); self.combo_color_fix.addItems(["None", "Wavelet", "Adain", "Histogram", "Linear", "Reforge"])
         self.combo_color_fix.setCurrentText(self.saved_config.get('color_fix', "None"))
         l_opts.addWidget(QLabel("색감:"))
         l_opts.addWidget(self.combo_color_fix)
         
         self.chk_auto_rotate = QCheckBox("자동 회전")
-        self.chk_auto_rotate.setChecked(self.saved_config.get('auto_rotate', True))
+        self.chk_auto_rotate.setChecked(bool(self.saved_config.get('auto_rotate', True)))
         l_opts.addWidget(self.chk_auto_rotate)
         
         l_inp.addLayout(l_opts, 6, 0, 1, 3)
@@ -598,7 +620,7 @@ class AdetailerUnitWidget(QWidget):
         self.chk_bmab_enabled = QCheckBox("활성화 (Enable)")
         def_bmab_en = cfg.get('defaults', 'bmab_enabled')
         if def_bmab_en is None: def_bmab_en = True
-        self.chk_bmab_enabled.setChecked(self.saved_config.get('bmab_enabled', def_bmab_en))
+        self.chk_bmab_enabled.setChecked(bool(self.saved_config.get('bmab_enabled', def_bmab_en)))
         l_bmab_main.addWidget(self.chk_bmab_enabled)
 
         # [Ref] BMAB Basic Tab Layout (Single Column for 460px)
@@ -673,7 +695,7 @@ class AdetailerUnitWidget(QWidget):
         self.chk_resize_enable = QCheckBox("활성화")
         def_resize_en = cfg.get('defaults', 'resize_enable')
         if def_resize_en is None: def_resize_en = False
-        self.chk_resize_enable.setChecked(self.saved_config.get('resize_enable', def_resize_en))
+        self.chk_resize_enable.setChecked(bool(self.saved_config.get('resize_enable', def_resize_en)))
         l_comp.addWidget(self.chk_resize_enable, 0, 0)
         
         def_resize_ratio = cfg.get('defaults', 'resize_ratio') or 0.6
@@ -691,7 +713,7 @@ class AdetailerUnitWidget(QWidget):
         self.chk_landscape_detail.setToolTip("활성화 시, 인물이 작아도(최소 크기 미달이어도) 강제로 디테일링을 수행합니다.")
         def_land = cfg.get('defaults', 'bmab_landscape_detail')
         if def_land is None: def_land = False
-        self.chk_landscape_detail.setChecked(self.saved_config.get('bmab_landscape_detail', def_land))
+        self.chk_landscape_detail.setChecked(bool(self.saved_config.get('bmab_landscape_detail', def_land)))
         l_comp.addWidget(self.chk_landscape_detail, 3, 0, 1, 2)
         l_comp.setColumnStretch(1, 1) # [Fix]
         
@@ -714,7 +736,7 @@ class AdetailerUnitWidget(QWidget):
         # Top Row: Active & Hires Pass
         l_dd_top = QHBoxLayout()
         self.chk_dd_active = QCheckBox("활성화 (Enable)")
-        self.chk_dd_active.setChecked(self.saved_config.get('dd_enabled', False)) # Restore State
+        self.chk_dd_active.setChecked(bool(self.saved_config.get('dd_enabled', False))) # Restore State
         self.chk_dd_hires = QCheckBox("Hires Pass") # Not fully implemented logic-wise yet, but UI placeholder
         l_dd_top.addWidget(self.chk_dd_active)
         l_dd_top.addStretch()
@@ -812,7 +834,7 @@ class AdetailerUnitWidget(QWidget):
         self.chk_dd_smooth = QCheckBox("Smooth")
         def_dd_smooth = cfg.get('defaults', 'dd_smooth')
         if def_dd_smooth is None: def_dd_smooth = True
-        self.chk_dd_smooth.setChecked(self.saved_config.get('dd_smooth', def_dd_smooth))
+        self.chk_dd_smooth.setChecked(bool(self.saved_config.get('dd_smooth', def_dd_smooth)))
         l_right_vbox.addWidget(self.chk_dd_smooth)
         
         l_middle_hbox.addLayout(l_right_vbox, stretch=4) # Graph takes 40%
@@ -887,13 +909,13 @@ class AdetailerUnitWidget(QWidget):
         l_adv = QGridLayout()
         
         # CKPT/VAE
-        self.chk_sep_ckpt = QCheckBox("CKPT"); self.chk_sep_ckpt.setChecked(self.saved_config.get('sep_ckpt', False))
+        self.chk_sep_ckpt = QCheckBox("CKPT"); self.chk_sep_ckpt.setChecked(bool(self.saved_config.get('sep_ckpt', False)))
         self.combo_sep_ckpt = QComboBox(); self.combo_sep_ckpt.addItem("Use Global")
         ckpt_dir = cfg.get_path('checkpoint')
         if ckpt_dir: self.combo_sep_ckpt.addItems([f for f in os.listdir(ckpt_dir) if f.endswith(('.ckpt', '.safetensors'))])
         self.combo_sep_ckpt.setCurrentText(self.saved_config.get('sep_ckpt_name', 'Use Global'))
         
-        self.chk_sep_vae = QCheckBox("VAE"); self.chk_sep_vae.setChecked(self.saved_config.get('sep_vae', False))
+        self.chk_sep_vae = QCheckBox("VAE"); self.chk_sep_vae.setChecked(bool(self.saved_config.get('sep_vae', False)))
         self.combo_sep_vae = QComboBox(); self.combo_sep_vae.addItem("Use Global")
         vae_dir = cfg.get_path('vae')
         if vae_dir: self.combo_sep_vae.addItems([f for f in os.listdir(vae_dir) if f.endswith(('.pt','.ckpt','.safetensors'))])
@@ -903,7 +925,7 @@ class AdetailerUnitWidget(QWidget):
         l_adv.addWidget(self.chk_sep_vae, 0, 2); l_adv.addWidget(self.combo_sep_vae, 0, 3)
         
         # Sampler
-        self.chk_sep_sampler = QCheckBox("Sampler"); self.chk_sep_sampler.setChecked(self.saved_config.get('sep_sampler', False))
+        self.chk_sep_sampler = QCheckBox("Sampler"); self.chk_sep_sampler.setChecked(bool(self.saved_config.get('sep_sampler', False)))
         self.combo_sep_sampler = QComboBox(); self.combo_sep_sampler.addItems([
             "Euler a", "Euler", "DPM++ 2M", "DPM++ SDE", "DDIM", "UniPC"
         ])
@@ -925,20 +947,20 @@ class AdetailerUnitWidget(QWidget):
         
         # Steps/CFG/Clip (Split into two rows for 1-column compatibility)
         l_sub1 = QHBoxLayout(); make_tight(l_sub1)
-        self.chk_sep_steps=QCheckBox("Steps"); self.chk_sep_steps.setChecked(self.saved_config.get('sep_steps', False))
+        self.chk_sep_steps=QCheckBox("Steps"); self.chk_sep_steps.setChecked(bool(self.saved_config.get('sep_steps', False)))
         self.spin_sep_steps=QSpinBox(); self.spin_sep_steps.setValue(self.saved_config.get('steps', 20))
-        self.chk_sep_cfg=QCheckBox("CFG"); self.chk_sep_cfg.setChecked(self.saved_config.get('sep_cfg', False))
+        self.chk_sep_cfg=QCheckBox("CFG"); self.chk_sep_cfg.setChecked(bool(self.saved_config.get('sep_cfg', False)))
         self.spin_sep_cfg=QDoubleSpinBox(); self.spin_sep_cfg.setValue(self.saved_config.get('cfg_scale', 7.0))
         l_sub1.addWidget(self.chk_sep_steps); l_sub1.addWidget(self.spin_sep_steps)
         l_sub1.addWidget(self.chk_sep_cfg); l_sub1.addWidget(self.spin_sep_cfg)
         l_adv.addLayout(l_sub1, 2, 0, 1, 4)
         
         l_sub2 = QHBoxLayout(); make_tight(l_sub2)
-        self.chk_sep_clip=QCheckBox("Clip"); self.chk_sep_clip.setChecked(self.saved_config.get('sep_clip', False))
+        self.chk_sep_clip=QCheckBox("Clip"); self.chk_sep_clip.setChecked(bool(self.saved_config.get('sep_clip', False)))
         self.spin_clip=QSpinBox(); self.spin_clip.setRange(1,12); self.spin_clip.setValue(self.saved_config.get('clip_skip', 2))
         l_sub2.addWidget(self.chk_sep_clip); l_sub2.addWidget(self.spin_clip)
-        self.chk_sep_noise = QCheckBox("Sep Noise"); self.chk_sep_noise.setChecked(self.saved_config.get('sep_noise', False))
-        self.chk_restore_face = QCheckBox("Restore Face"); self.chk_restore_face.setChecked(self.saved_config.get('restore_face', False))
+        self.chk_sep_noise = QCheckBox("Sep Noise"); self.chk_sep_noise.setChecked(bool(self.saved_config.get('sep_noise', False)))
+        self.chk_restore_face = QCheckBox("Restore Face"); self.chk_restore_face.setChecked(bool(self.saved_config.get('restore_face', False)))
         l_sub2.addWidget(self.chk_sep_noise)
         l_sub2.addWidget(self.chk_restore_face)
         l_adv.addLayout(l_sub2, 3, 0, 1, 4)
@@ -950,8 +972,7 @@ class AdetailerUnitWidget(QWidget):
         
         # [New] Post Sharpen Slider (Row 5)
         def_sharpen = cfg.get('defaults', 'post_sharpen') or 0.3
-        self.add_slider_row(l_adv, 5, "후처리 선명도:", "post_sharpen", 0.0, 1.5, 
-                            self.saved_config.get('post_sharpen', def_sharpen), 0.05, start_col=0)
+        self.add_slider_row(l_adv, 5, "Sharpen:", "post_sharpen", 0.0, 1.0, 0.15, 0.05, start_col=0)
         
         g_adv.setLayout(l_adv)
         t4_layout.addWidget(g_adv)
@@ -962,7 +983,7 @@ class AdetailerUnitWidget(QWidget):
         
         # Row 0: Enable Checkbox
         self.chk_hires = QCheckBox("Enable Hires Fix")
-        self.chk_hires.setChecked(self.saved_config.get('use_hires_fix', False))
+        self.chk_hires.setChecked(bool(self.saved_config.get('use_hires_fix', False)))
         l_hires.addWidget(self.chk_hires, 0, 0, 1, 4)
         
         # Row 1: Upscaler (Dynamic Load)
@@ -1018,9 +1039,17 @@ class AdetailerUnitWidget(QWidget):
         }
         l_hires.addWidget(self.spin_hires_h, 5, 3)
 
-        # Row 5: Hires CFG
+        # [New] Pose Guide Checkbox (Row 5 or new Group)
+        self.chk_pose_guide = QCheckBox("Enable Pose Guide (ControlNet)")
+        self.chk_pose_guide.setChecked(bool(self.saved_config.get('use_pose_guide', False)))
+        self.chk_pose_guide.setToolTip("YOLO Pose를 사용하여 인페인팅 시 자세를 가이드합니다. (ControlNet OpenPose 필요)")
+        
+        # Add to layout (Row 6)
+        l_hires.addWidget(self.chk_pose_guide, 6, 0, 1, 4)
+
+        # Row 7: Hires CFG
         def_hires_cfg = cfg.get('defaults', 'hires_cfg') or 5.0
-        self.add_slider_row(l_hires, 6, "Hires CFG Scale", 'hires_cfg', 1.0, 30.0, 
+        self.add_slider_row(l_hires, 7, "Hires CFG Scale", 'hires_cfg', 1.0, 30.0, 
                             def_hires_cfg, 0.5)
 
         g_hires.setLayout(l_hires)
@@ -1086,6 +1115,55 @@ class AdetailerUnitWidget(QWidget):
         # 스핀박스 -> 슬라이더 (값 변경 시 즉시 반영)
         spin.valueChanged.connect(lambda v: slider.setValue(int(v * scale)))
         
+        # [Fix] Capture in settings for get_config
+        self.settings[key] = {
+            'widget': spin,
+            'default': default_val
+        }
+        
+    def add_slider_row_manual(self, layout, label_text, key, min_val, max_val, default_val, step):
+        label = QLabel(label_text)
+        
+        slider = QSlider(Qt.Orientation.Horizontal)
+        slider.setFixedWidth(80)
+        
+        loaded_val = self.saved_config.get(key, default_val)
+        is_float = isinstance(default_val, float)
+        scale = 100 if is_float else 1
+        
+        slider.setRange(int(min_val * scale), int(max_val * scale))
+        
+        if is_float:
+            spin = QDoubleSpinBox()
+            spin.setDecimals(2)
+        else:
+            spin = QSpinBox()
+            
+        spin.setRange(min_val, max_val)
+        spin.setSingleStep(step)
+        spin.setFixedWidth(55)
+        spin.setObjectName("clean_spin")
+        spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        
+        spin.setValue(loaded_val)
+        slider.setValue(int(loaded_val * scale))
+        
+        if is_float:
+            slider.valueChanged.connect(lambda v: spin.setValue(v / scale))
+        else:
+            slider.valueChanged.connect(lambda v: spin.setValue(int(v / scale)))
+            
+        spin.valueChanged.connect(lambda v: slider.setValue(int(v * scale)))
+        
+        layout.addWidget(label)
+        layout.addWidget(slider)
+        layout.addWidget(spin)
+        
+        self.settings[key] = {
+            'widget': spin,
+            'default': default_val
+        }
+        
         # Note: addWidget called above, don't duplicate. 
         # The original code had duplicate addWidget calls? 
         # Yes, lines 1004-1006 were duplicates of 997-999 in previous context.
@@ -1125,6 +1203,10 @@ class AdetailerUnitWidget(QWidget):
         cfg = self.get_config()
         self.preview_requested.emit(cfg)
 
+    # ==========================================================
+    # PRESETS & UTILS
+    # ==========================================================
+
     def on_reset_clicked(self):
         """현재 패스의 모든 설정을 기본값으로 초기화"""
         from PyQt6.QtWidgets import QMessageBox
@@ -1148,7 +1230,8 @@ class AdetailerUnitWidget(QWidget):
         # Basic
         self.chk_enable.setChecked("1" in self.unit_name) # Pass 1 enabled by default, others false
         self.radio_yolo.setChecked(True)
-        self.chk_auto_prompt.setChecked(True)
+        if hasattr(self, 'chk_auto_prompt'): self.chk_auto_prompt.setChecked(True)
+        self.chk_auto_interrogate.setChecked(True)
         
         # Model & Prompts
         default_model = cfg.get('files', 'sam_file') or "face_yolov8n.pt"
@@ -1298,13 +1381,14 @@ class AdetailerUnitWidget(QWidget):
         cfg = {
             'enabled': self.chk_enable.isChecked(),
             'detector_model': self.combo_model.currentText(),
-            'yolo_classes': self.txt_yolo_classes.toPlainText(),
+            'yolo_classes': self.txt_yolo_classes.toPlainText().strip(),
             'use_sam': self.radio_sam.isChecked(),
             
             # [Collect Config]
             'pos_prompt': self.txt_pos.toPlainText(),
             'neg_prompt': self.txt_neg.toPlainText(),
-            'auto_prompt_injection': self.chk_auto_prompt.isChecked(),
+            'auto_prompting': self.chk_auto_interrogate.isChecked(),
+            'auto_prompt_injection': self.chk_auto_prompt.isChecked() if hasattr(self, 'chk_auto_prompt') else True,
 
             # --- Detection ---
             'gender_filter': self.combo_gender.currentText(),
@@ -1316,6 +1400,7 @@ class AdetailerUnitWidget(QWidget):
             # --- Inpaint ---
             'inpaint_width': self.spin_inpaint_w.value(),
             'inpaint_height': self.spin_inpaint_h.value(),
+            'max_det_res': self.spin_max_res.value(),
             'mask_merge_mode': self.combo_mask_merge.currentText(),
             'use_noise_mask': False, # Deprecated/Merged into Mask Content
             'auto_rotate': self.chk_auto_rotate.isChecked(),
@@ -1342,6 +1427,8 @@ class AdetailerUnitWidget(QWidget):
             # --- ControlNet ---
             'control_model': self.combo_cn_model.currentText(),
             'control_module': self.combo_cn_module.currentText(),
+            # [New] Pose Guide
+            'use_pose_guide': self.chk_pose_guide.isChecked(),
 
             # [Detail Daemon Config]
             'dd_enabled': self.chk_dd_active.isChecked(),
@@ -1429,3 +1516,104 @@ class AdetailerUnitWidget(QWidget):
             
         cfg['seed'] = -1
         return cfg
+
+# ==========================================================
+# Classifier Tab (Standalone)
+# ==========================================================
+from PyQt6.QtWidgets import QProgressBar
+
+class ClassifierTab(QWidget):
+    start_requested = pyqtSignal(list) # [file_paths]
+
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        # 1. Title/Description
+        header = QLabel("🛡️ 고성능 이미지 성별 분류기 (Standalone Classifier)")
+        header.setStyleSheet("font-size: 18px; font-weight: bold; color: #3498db;")
+        layout.addWidget(header)
+
+        desc = QLabel("이미지를 드래그 앤 드롭하여 대기열에 추가한 후 '분류 시작'을 누르세요.\n"
+                      "듀얼 GPU를 사용하여 인물의 성별 배열(예: MFF)에 따라 파일을 자동으로 이동합니다.\n"
+                      "※ 이 작업은 이미지 디테일링을 수행하지 않습니다.")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+
+        # 2. File Queue
+        self.file_queue = FileQueueWidget()
+        self.file_queue.setMinimumHeight(400)
+        layout.addWidget(self.file_queue)
+
+        # 3. Control Buttons
+        btn_layout = QHBoxLayout()
+        
+        self.btn_start = QPushButton("🚀 분류 시작 (Start Classification)")
+        self.btn_start.setFixedHeight(50)
+        self.btn_start.setStyleSheet("""
+            QPushButton { 
+                background-color: #3498db; color: white; font-weight: bold; font-size: 16px; border-radius: 5px;
+            }
+            QPushButton:hover { background-color: #2980b9; }
+            QPushButton:pressed { background-color: #21618c; }
+        """)
+        self.btn_start.clicked.connect(self.on_start_clicked)
+        
+        self.btn_stop = QPushButton("⏹ 중지")
+        self.btn_stop.setFixedHeight(50)
+        self.btn_stop.setEnabled(False)
+        self.btn_stop.clicked.connect(self.on_stop_clicked)
+
+        btn_layout.addWidget(self.btn_start, 3)
+        btn_layout.addWidget(self.btn_stop, 1)
+        layout.addLayout(btn_layout)
+
+        # 4. Status Group
+        self.status_group = QGroupBox("처리 현황")
+        status_layout = QVBoxLayout()
+        self.lbl_status = QLabel("대기 중...")
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedHeight(20)
+        status_layout.addWidget(self.lbl_status)
+        status_layout.addWidget(self.progress_bar)
+        self.status_group.setLayout(status_layout)
+        layout.addWidget(self.status_group)
+
+    def on_start_clicked(self):
+        tasks = self.file_queue.get_all_tasks() # [(path, angle), ...]
+        if not tasks:
+            return
+        
+        paths = [t[0] for t in tasks]
+        self.start_requested.emit(paths)
+        self.set_processing_state(True)
+
+    def on_stop_clicked(self):
+        # Signaling is handled via MainWindow -> Controller.stop()
+        # This is just a UI placeholder for now if needed.
+        pass
+
+    def set_processing_state(self, is_processing):
+        self.btn_start.setEnabled(not is_processing)
+        self.btn_stop.setEnabled(is_processing)
+        self.file_queue.setEnabled(not is_processing)
+
+    def update_progress(self, current, total):
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(current)
+        self.lbl_status.setText(f"처리 중: {current} / {total}")
+        if current >= total:
+            self.set_processing_state(False)
+            self.lbl_status.setText("분류 완료!")
+
+    def set_theme(self, mode):
+        self.file_queue.set_theme(mode)
+        if mode == "dark":
+            self.status_group.setStyleSheet(f"QGroupBox {{ color: {ModernTheme.DARK_TEXT_MAIN}; }}")
+        else:
+            self.status_group.setStyleSheet(f"QGroupBox {{ color: {ModernTheme.LIGHT_TEXT_MAIN}; }}")

@@ -13,7 +13,54 @@ def apply_color_fix(target_img, source_img, method="None"):
         return histogram_matching(target_img, source_img)
     elif method == "Linear":
         return rgb_linear_fix(target_img, source_img)
+    elif method == "Reforge":
+        # Forge Style: LAB Histogram Matching + Luminosity Blending
+        corrected = match_histograms_lab(target_img, source_img)
+        return blend_luminosity(corrected, target_img)
     return target_img
+
+def match_histograms_lab(target, source):
+    """
+    LAB 색상 공간에서 히스토그램 매칭을 수행합니다 (Forge/A1111 방식).
+    RGB보다 색상 전이가 적고 자연스럽습니다.
+    """
+    target_lab = cv2.cvtColor(target, cv2.COLOR_BGR2LAB)
+    source_lab = cv2.cvtColor(source, cv2.COLOR_BGR2LAB)
+    
+    result_lab = np.zeros_like(target_lab)
+    
+    for i in range(3): # L, A, B channels
+        # Source CDF
+        s_values, s_counts = np.unique(source_lab[..., i], return_counts=True)
+        s_quantiles = np.cumsum(s_counts).astype(np.float64)
+        s_quantiles /= s_quantiles[-1]
+        
+        # Target CDF
+        t_values, t_counts = np.unique(target_lab[..., i], return_counts=True)
+        t_quantiles = np.cumsum(t_counts).astype(np.float64)
+        t_quantiles /= t_quantiles[-1]
+        
+        # Mapping
+        interp_t_values = np.interp(t_quantiles, s_quantiles, s_values)
+        lookup_table = np.interp(np.arange(256), t_values, interp_t_values).astype(np.uint8)
+        result_lab[..., i] = cv2.LUT(target_lab[..., i], lookup_table)
+        
+    return cv2.cvtColor(result_lab, cv2.COLOR_LAB2BGR)
+
+def blend_luminosity(source, detail):
+    """
+    source의 색상(C)과 detail의 밝기(L)를 결합합니다 (Luminosity Blend).
+    디테일은 유지하면서 색감만 타겟에 맞출 때 사용합니다.
+    """
+    source_lab = cv2.cvtColor(source, cv2.COLOR_BGR2LAB)
+    detail_lab = cv2.cvtColor(detail, cv2.COLOR_BGR2LAB)
+    
+    # Detail의 L 채널(밝기) + Source의 AB 채널(색상)
+    combined_lab = detail_lab.copy()
+    combined_lab[..., 1] = source_lab[..., 1]
+    combined_lab[..., 2] = source_lab[..., 2]
+    
+    return cv2.cvtColor(combined_lab, cv2.COLOR_LAB2BGR)
 
 def histogram_matching(target, source):
     """CDF(Cumulative Distribution Function)를 기반으로 히스토그램을 일치시킵니다."""

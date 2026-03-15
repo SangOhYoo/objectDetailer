@@ -29,16 +29,27 @@ class AdetailerUnitWidget(QWidget):
 
     def init_ui(self):
         # [New] Scroll is still useful for small screens, even with Tabs
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
-        # [Fix] Re-enable Horizontal Scroll allows narrowing the panel without losing access to controls
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        # Keep AlwaysOff as user requested "no horizontal scroll on initial load"
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Expliticly allow the scroll area to shrink so the QSplitter can squeeze the left panel
+        self.scroll.setMinimumWidth(200)
         
         content_widget = QWidget()
+        # [Fix] Force the content widget to allow squeezing, overriding layout minimums
+        content_widget.setMinimumWidth(100)
+        
         self.main_layout = QVBoxLayout(content_widget)
         self.main_layout.setSpacing(5) # Compact spacing
         self.main_layout.setContentsMargins(2, 2, 2, 2) # Reduced margins
+        
+        # Finally, a simple vertical layout for the tab itself to host the scroll area
+        self.tab_root_layout = QVBoxLayout(self)
+        self.tab_root_layout.setContentsMargins(0, 0, 0, 0)
+        self.tab_root_layout.addWidget(self.scroll)
+        self.scroll.setWidget(content_widget)
 
         # [Fix] Ratio Unit Conversion
         if 'min_face_ratio' in self.saved_config:
@@ -55,13 +66,13 @@ class AdetailerUnitWidget(QWidget):
         top_layout = QVBoxLayout()
         top_layout.setContentsMargins(5, 5, 5, 5)
 
-        # Row 1: Enable | Mode | Auto Prompt (Merged for compactness)
-        row1_layout = QHBoxLayout()
+        # Row 1-A: Enable | Mode | Buttons
+        row1a_layout = QHBoxLayout()
         
-        self.chk_enable = QCheckBox(f"활성화 ({self.unit_name})") # Shortened label
+        self.chk_enable = QCheckBox(f"활성화 ({self.unit_name})") 
         self.chk_enable.setObjectName("important_chk")
         self.chk_enable.setChecked(bool(self.saved_config.get('enabled', ("1" in self.unit_name))))
-        row1_layout.addWidget(self.chk_enable)
+        row1a_layout.addWidget(self.chk_enable)
         
         # Mode Radios
         self.radio_yolo = QRadioButton("YOLO")
@@ -73,47 +84,56 @@ class AdetailerUnitWidget(QWidget):
         bg.addButton(self.radio_yolo)
         bg.addButton(self.radio_sam)
         
-        row1_layout.addWidget(self.radio_yolo)
-        row1_layout.addWidget(self.radio_sam)
-        
-        # Auto Interrogate (WD14)
-        self.chk_auto_interrogate = QCheckBox("🔍 자동 분석 (WD14)")
-        self.chk_auto_interrogate.setToolTip("WD14 Tagger를 사용하여 탐지된 객체를 분석하고 프롬프트를 자동 생성합니다.")
-        self.chk_auto_interrogate.setChecked(bool(self.saved_config.get('auto_prompting', True)))
-        row1_layout.addWidget(self.chk_auto_interrogate)
-        
-        # [New] Auto Prompt Injection (Quality)
-        self.chk_auto_prompt = QCheckBox("✨ 품질 보정 (Quality)")
-        self.chk_auto_prompt.setToolTip("인페인팅 프롬프트에 'high quality, detailed' 등의 품질 키워드를 자동으로 추가합니다.")
-        self.chk_auto_prompt.setChecked(bool(self.saved_config.get('auto_prompt_injection', True)))
-        row1_layout.addWidget(self.chk_auto_prompt)
-        
-        # Interrogator Threshold
-        self.add_slider_row_manual(row1_layout, "Thresh:", "interrogator_threshold", 0.0, 1.0, 0.35, 0.05)
-        
-        row1_layout.addStretch()
+        row1a_layout.addWidget(self.radio_yolo)
+        row1a_layout.addWidget(self.radio_sam)
+        row1a_layout.addStretch()
         
         # [New] Reset Button
         self.btn_reset = QPushButton("초기화 (Reset)")
         self.btn_reset.setToolTip("이 패스의 모든 설정을 기본값으로 되돌립니다.")
         self.btn_reset.clicked.connect(self.on_reset_clicked)
         self.btn_reset.setObjectName("warning_btn")
-        row1_layout.addWidget(self.btn_reset)
+        row1a_layout.addWidget(self.btn_reset)
 
         # [New] Detect Preview Button
         self.btn_detect_preview = QPushButton("탐지 (Detect)")
         self.btn_detect_preview.setToolTip("선택된 이미지에 대해 탐지 테스트만 수행합니다. (인페인팅 건너뜀)")
         self.btn_detect_preview.clicked.connect(self.on_detect_preview_clicked)
-        row1_layout.addWidget(self.btn_detect_preview)
+        row1a_layout.addWidget(self.btn_detect_preview)
+
+        # Row 1-B: Auto Prompt Controls
+        row1b_layout = QHBoxLayout()
         
-        top_layout.addLayout(row1_layout)
+        # Auto Interrogate (WD14)
+        self.chk_auto_interrogate = QCheckBox("🔍 자동 분석 (WD14)")
+        self.chk_auto_interrogate.setToolTip("WD14 Tagger를 사용하여 탐지된 객체를 분석하고 프롬프트를 자동 생성합니다.")
+        self.chk_auto_interrogate.setChecked(bool(self.saved_config.get('auto_prompting', True)))
+        row1b_layout.addWidget(self.chk_auto_interrogate)
+        
+        # [New] Auto Prompt Injection (Quality)
+        self.chk_auto_prompt = QCheckBox("✨ 품질 보정 (Quality)")
+        self.chk_auto_prompt.setToolTip("인페인팅 프롬프트에 'high quality, detailed' 등의 품질 키워드를 자동으로 추가합니다.")
+        self.chk_auto_prompt.setChecked(bool(self.saved_config.get('auto_prompt_injection', True)))
+        row1b_layout.addWidget(self.chk_auto_prompt)
+        row1b_layout.addStretch()
+
+        # Row 1-C: Interrogator Threshold
+        row1c_layout = QHBoxLayout()
+        self.add_slider_row_manual(row1c_layout, "Thresh:", "interrogator_threshold", 0.0, 1.0, 0.35, 0.05)
+        row1c_layout.addStretch()
+        
+        top_layout.addLayout(row1a_layout)
+        top_layout.addLayout(row1b_layout)
+        top_layout.addLayout(row1c_layout)
 
         # Row 2: Model | YOLO Classes (Merged)
         row2_layout = QHBoxLayout()
         
         # Model
         self.combo_model = QComboBox()
-        self.combo_model.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.combo_model.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed) # [Fix] Ignore long filenames pushing layout
+        self.combo_model.setMinimumWidth(50) # [Fix] Allow shrinking
+
         
         # Scan Paths
         search_paths = [cfg.get_path('sam')]
@@ -148,8 +168,10 @@ class AdetailerUnitWidget(QWidget):
 
         # Classes
         self.txt_yolo_classes = QTextEdit()
+        self.txt_yolo_classes.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed) # [Fix] Allow squeezing horizontally
         self.txt_yolo_classes.setPlaceholderText("YOLO Classes (e.g. cat)")
         self.txt_yolo_classes.setMaximumHeight(26) # Single line look
+        self.txt_yolo_classes.setMinimumWidth(50) # [Fix] Allow shrinking
         self.txt_yolo_classes.setText(self.saved_config.get('yolo_classes', ""))
         # [Fix] Remove inline style to allow theme border
         self.txt_yolo_classes.setObjectName("yolo_classes")
@@ -164,18 +186,18 @@ class AdetailerUnitWidget(QWidget):
         self.txt_pos = QTextEdit()
         self.txt_pos.setPlaceholderText("Positive Prompt (긍정 프롬프트)")
         self.txt_pos.setText(self.saved_config.get('pos_prompt', ""))
-        # [Ref] Unlock Max Height for Vertical Expansion
         self.txt_pos.setMinimumHeight(60) 
-        self.txt_pos.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.txt_pos.setMinimumWidth(50) # [Fix] Allow shrinking
+        self.txt_pos.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding) # [Fix] Allow horizontal squeezing
         self.txt_pos.setObjectName("pos_prompt")
         
         # Negative
         self.txt_neg = QTextEdit()
         self.txt_neg.setPlaceholderText("Negative Prompt (부정 프롬프트)")
         self.txt_neg.setText(self.saved_config.get('neg_prompt', ""))
-        # [Ref] Unlock Max Height for Vertical Expansion
         self.txt_neg.setMinimumHeight(50)
-        self.txt_neg.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.txt_neg.setMinimumWidth(50) # [Fix] Allow shrinking
+        self.txt_neg.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding) # [Fix] Allow horizontal squeezing
         self.txt_neg.setObjectName("neg_prompt")
         
         # [Fix] Add Stretch factors (Pos: 2, Neg: 1)
@@ -185,12 +207,11 @@ class AdetailerUnitWidget(QWidget):
         
         top_group.setLayout(top_layout)
         self.main_layout.addWidget(top_group)
-
-        # ==========================================================
         # 2. TAB AREA
         # ==========================================================
         from PyQt6.QtWidgets import QTabWidget
         self.tabs = QTabWidget()
+        self.tabs.setUsesScrollButtons(True) # [Fix] Allow tabs to scroll instead of pushing window width
         self.tabs.setStyleSheet("QTabWidget::pane { border: 1px solid #bdc3c7; }")
         
         # --- TAB 1: Detection & Mask ---
@@ -295,40 +316,36 @@ class AdetailerUnitWidget(QWidget):
         # [Ref] Removed manual loop for StyleSheet - handled by Global ModernTheme
         # Properties/IDs set if needed, but defaults are fine.
 
-        # [Ref] Unified Sort & Filter Group (Single Row Compact)
+        # [Ref] Unified Sort & Filter Group (Split into three rows to prevent horizontal cut-off)
         g_sort_filter = QGroupBox("정렬/필터")
-        l_sf = QHBoxLayout()
-        l_sf.setContentsMargins(5, 5, 5, 2) # Top margin for title space
-        l_sf.setSpacing(6)
+        l_sf_main = QVBoxLayout()
+        l_sf_main.setContentsMargins(5, 5, 5, 2)
+        l_sf_main.setSpacing(4)
         
-        # Sort Group 1: Horizontal
-        l_sf.addWidget(self.radio_sort_lr)
-        l_sf.addWidget(self.radio_sort_rl)
-        l_sf.addWidget(self.radio_sort_center)
-        
-        l_sf.addWidget(QLabel("|")) # Separator
-        
-        # Sort Group 2: Vertical
-        l_sf.addWidget(self.radio_sort_tb)
-        l_sf.addWidget(self.radio_sort_bt)
-        
-        l_sf.addWidget(QLabel("|")) # Separator
-        
-        # Sort Group 3: Misc
-        l_sf.addWidget(self.radio_sort_area)
-        l_sf.addWidget(self.radio_sort_conf)
-        
-        l_sf.addWidget(QLabel("|")) # Separator
-        
-        # Filters
-        l_sf.addWidget(self.chk_ignore_edge)
-        l_sf.addWidget(self.chk_anatomy)
-        l_sf.addWidget(self.chk_pose_rotation)
-        
-        l_sf.addStretch() # Fill remaining space
+        l_sf_1 = QHBoxLayout()
+        l_sf_1.addWidget(self.radio_sort_lr)
+        l_sf_1.addWidget(self.radio_sort_rl)
+        l_sf_1.addWidget(self.radio_sort_center)
+        l_sf_1.addStretch()
 
-        # [Fix] Set layout for the group box
-        g_sort_filter.setLayout(l_sf)
+        l_sf_2 = QHBoxLayout()
+        l_sf_2.addWidget(self.radio_sort_tb)
+        l_sf_2.addWidget(self.radio_sort_bt)
+        l_sf_2.addWidget(QLabel("|"))
+        l_sf_2.addWidget(self.radio_sort_area)
+        l_sf_2.addWidget(self.radio_sort_conf)
+        l_sf_2.addStretch()
+
+        l_sf_3 = QHBoxLayout()
+        l_sf_3.addWidget(self.chk_ignore_edge)
+        l_sf_3.addWidget(self.chk_anatomy)
+        l_sf_3.addWidget(self.chk_pose_rotation)
+        l_sf_3.addStretch()
+
+        l_sf_main.addLayout(l_sf_1)
+        l_sf_main.addLayout(l_sf_2)
+        l_sf_main.addLayout(l_sf_3)
+        g_sort_filter.setLayout(l_sf_main)
 
         # Add to Main Grid
         l_det.addWidget(g_sort_filter, 5, 0, 1, 4)
@@ -490,16 +507,20 @@ class AdetailerUnitWidget(QWidget):
         l_opts = QHBoxLayout()
         make_tight(l_opts)
         
-        self.combo_mask_merge = QComboBox(); self.combo_mask_merge.addItems(["None", "Merge", "Merge+Inv"])
-        saved_merge = self.saved_config.get('mask_merge_mode', "None")
-        if isinstance(saved_merge, bool): saved_merge = "Merge" if saved_merge else "None"
-        elif saved_merge == "Merge and Invert": saved_merge = "Merge+Inv" # Shorten for layout
+        self.combo_mask_merge = QComboBox()
+        self.combo_mask_merge.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.combo_mask_merge.addItems(["선택적 병합 (권장, 빠른 속도)", "전체 병합 (느린 속도, 고품질)"])
+        self.combo_mask_merge.setMinimumWidth(50) # Allow shrinking
+        saved_merge = self.saved_config.get('mask_merge_mode', cfg.get('defaults', 'mask_merge_mode') or "선택적 병합 (권장, 빠른 속도)")
         self.combo_mask_merge.setCurrentText(saved_merge)
         
         l_opts.addWidget(QLabel("병합:"))
         l_opts.addWidget(self.combo_mask_merge)
         
-        self.combo_color_fix = QComboBox(); self.combo_color_fix.addItems(["None", "Wavelet", "Adain", "Histogram", "Linear", "Reforge"])
+        self.combo_color_fix = QComboBox()
+        self.combo_color_fix.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.combo_color_fix.addItems(["None", "Wavelet", "Adain", "Histogram", "Linear", "Reforge"])
+        self.combo_color_fix.setMinimumWidth(50) # Allow shrinking
         self.combo_color_fix.setCurrentText(self.saved_config.get('color_fix', "None"))
         l_opts.addWidget(QLabel("색감:"))
         l_opts.addWidget(self.combo_color_fix)
@@ -566,6 +587,8 @@ class AdetailerUnitWidget(QWidget):
         l_cn = QGridLayout()
         
         self.combo_cn_model = QComboBox(); self.combo_cn_model.addItem("None")
+        self.combo_cn_model.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.combo_cn_model.setMinimumWidth(50)
         cn_dir = cfg.get_path('controlnet')
         if cn_dir and os.path.exists(cn_dir):
             try:
@@ -578,6 +601,8 @@ class AdetailerUnitWidget(QWidget):
         self.combo_cn_model.setCurrentText(saved_cn)
         
         self.combo_cn_module = QComboBox() 
+        self.combo_cn_module.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.combo_cn_module.setMinimumWidth(50)
         self.combo_cn_module.addItems(["None", "openpose", "canny", "depth_midas", "openpose_full", "softedge_pidinet", "scribble_hed"])
         self.combo_cn_module.setCurrentText(self.saved_config.get('control_module', "None"))
 
@@ -1059,10 +1084,6 @@ class AdetailerUnitWidget(QWidget):
 
         # Finish Setup
         self.main_layout.addWidget(self.tabs)
-        scroll.setWidget(content_widget)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0,0,0,0)
-        outer.addWidget(scroll)
         
         # Signals
         self.combo_sep_ckpt.currentTextChanged.connect(self.on_local_ckpt_changed)
@@ -1486,21 +1507,7 @@ class AdetailerUnitWidget(QWidget):
             
             'restore_face': self.chk_restore_face.isChecked(),
             'use_hires_fix': self.chk_hires.isChecked(),
-            'use_hires_fix': self.chk_hires.isChecked(),
             'sep_noise': self.chk_sep_noise.isChecked(),
-            
-            # [New] Detail Daemon Params
-            'dd_enabled': self.chk_dd_active.isChecked(),
-            'dd_start': self.slider_dd_start.value() / 100.0,
-            'dd_end': self.slider_dd_end.value() / 100.0,
-            'dd_amount': self.slider_dd_amount.value() / 100.0,
-            'dd_bias': self.slider_dd_bias.value() / 100.0,
-            'dd_exponent': self.slider_dd_exponent.value() / 100.0,
-            'dd_start_offset': self.slider_dd_start_offset.value() / 100.0,
-            'dd_end_offset': self.slider_dd_end_offset.value() / 100.0,
-            'dd_fade': self.slider_dd_fade.value() / 100.0,
-            'dd_smooth': self.chk_dd_smooth.isChecked(),
-            'dd_mode': self.combo_dd_mode.currentText(),
             'post_sharpen': self.settings['post_sharpen']['widget'].value(),
             'restore_face_strength': self.settings['restore_face_strength']['widget'].value(),
         }
@@ -1537,6 +1544,7 @@ class ClassifierTab(QWidget):
         # 1. Title/Description
         header = QLabel("🛡️ 고성능 이미지 성별 분류기 (Standalone Classifier)")
         header.setStyleSheet("font-size: 18px; font-weight: bold; color: #3498db;")
+        header.setWordWrap(True) # [Fix] Allow this long text to wrap so it doesn't force a minimum width > 650px
         layout.addWidget(header)
 
         desc = QLabel("이미지를 드래그 앤 드롭하여 대기열에 추가한 후 '분류 시작'을 누르세요.\n"

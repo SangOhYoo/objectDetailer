@@ -126,40 +126,34 @@ class MainWindow(QMainWindow):
         btn_global_load.clicked.connect(self.load_global_settings)
         btn_global_load.setFixedSize(30, 30) # Compact Icon Button
 
-        # [Ref] Single-Row Layout for Global Settings
-        # Layout: [Ckpt Label] [Ckpt Combo] [Save] | [VAE Label] [VAE Combo] [Load]
-        # To fit in 1/3 width (~600px), we use minimal spacing
-        
-        global_layout = QHBoxLayout()
+        # [Ref] 2-Row Layout for Global Settings to avoid horizontal overflow
+        global_layout = QGridLayout()
         global_layout.setContentsMargins(5, 5, 5, 5)
         global_layout.setSpacing(5)
         
-        # Checkpoint Section
+        # Checkpoint Section (Row 0)
         lbl_ckpt = QLabel("Ckpt:")
         lbl_ckpt.setToolTip("Stable Diffusion Checkpoint Model")
-        global_layout.addWidget(lbl_ckpt)
+        global_layout.addWidget(lbl_ckpt, 0, 0)
         
-        self.combo_global_ckpt.setMaximumWidth(220) # [Fix] Limit width
-        global_layout.addWidget(self.combo_global_ckpt, 1) # Stretch 1
+        self.combo_global_ckpt.setMinimumWidth(50) # [Fix] Allow shrinking
+        self.combo_global_ckpt.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed) # [Fix] Ignore long filenames pushing layout
+        global_layout.addWidget(self.combo_global_ckpt, 0, 1) # Auto stretch
         
-        btn_global_save.setFixedSize(40, 30) # [Fix] Slightly wider
-        global_layout.addWidget(btn_global_save)
+        btn_global_save.setFixedSize(40, 30)
+        global_layout.addWidget(btn_global_save, 0, 2)
         
-        # VAE Section
-        # Divider (Vertical Line)
-        line = QLabel("|")
-        line.setStyleSheet("color: gray;")
-        global_layout.addWidget(line)
-        
+        # VAE Section (Row 1)
         lbl_vae = QLabel("VAE:")
         lbl_vae.setToolTip("VAE Model")
-        global_layout.addWidget(lbl_vae)
+        global_layout.addWidget(lbl_vae, 1, 0)
         
-        self.combo_global_vae.setMaximumWidth(220) # [Fix] Limit width
-        global_layout.addWidget(self.combo_global_vae, 1) # Stretch 1
+        self.combo_global_vae.setMinimumWidth(50) # [Fix] Allow shrinking
+        self.combo_global_vae.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed) # [Fix] Ignore long filenames pushing layout
+        global_layout.addWidget(self.combo_global_vae, 1, 1)
         
-        btn_global_load.setFixedSize(40, 30) # [Fix] Slightly wider
-        global_layout.addWidget(btn_global_load)
+        btn_global_load.setFixedSize(40, 30)
+        global_layout.addWidget(btn_global_load, 1, 2)
         
         self.global_group.setLayout(global_layout)
         left_layout.addWidget(self.global_group)
@@ -189,11 +183,7 @@ class MainWindow(QMainWindow):
 
         left_layout.addWidget(self.tabs)
         
-        left_panel.setMinimumWidth(400) # 최소 너비 확보 (40% 비율 유연성)
-
-        # [Ref] Splitter Ratio (1:2 => Left Panel ~1/3 Width)
-        # Main Window Width is set to 1800, so Left ~600, Right ~1200
-        self.splitter.setSizes([600, 1200])
+        left_panel.setMinimumWidth(630) # [Fix] 강제로 우측 창에게 짓눌려 400px이 되는 것을 방지 (가려짐 해결)
 
         # ============================================================
         # [Right Panel] Preview & Logs
@@ -334,14 +324,7 @@ class MainWindow(QMainWindow):
         self.splitter.addWidget(left_panel)
         self.splitter.addWidget(right_panel)
         
-        # [New] Apply Splitter Size (Force Left Limit)
-        # Using QTimer to apply AFTER layout calculation
-        # [Adjust] Widen Left Panel (750px) for better visibility
-        # [New] Apply Splitter Size (Force Left Limit)
-        # Using QTimer to apply AFTER layout calculation
-        # [Adjust] Widen Left Panel (1070px) for better visibility
-        QTimer.singleShot(0, lambda: self.splitter.setSizes([1070, 735]))
-
+        # [Moved] Splitter sizing is now strictly handled in showEvent to prevent conflicts
         self.status_filename_label = QLabel("")
         self.status_filename_label.setStyleSheet("margin-left: 10px;")
         self.statusBar().addPermanentWidget(self.status_filename_label)

@@ -46,65 +46,63 @@ def save_image_with_metadata(cv2_image, original_path, save_path):
         metadata = PngImagePlugin.PngInfo()
         
         # 3. 원본 메타데이터/ICC 프로필 보존
-        exif_bytes = b""
+        exif_bytes = None
         icc_profile = None
-        info_to_preserve = {}
         
         try:
             if os.path.exists(original_path):
-                original_pil = Image.open(original_path)
-                
-                # A. ICC Profile Preservation
-                icc_profile = original_pil.info.get("icc_profile")
-                
-                # B. PNG Info preservation (excluding parameters and internal tags)
-                # Note: We used to merge parameters here, now we just keep original if present
-                existing_params = original_pil.info.get("parameters", "")
-                if existing_params:
-                     metadata.add_text("parameters", existing_params)
-                
-                # C. XMP and other metadata chunks preservation
-                xmp_data = original_pil.info.get("XML:com.adobe.xmp") or original_pil.info.get("xmp")
-                if xmp_data:
-                    info_to_preserve["XML:com.adobe.xmp"] = xmp_data
+                with Image.open(original_path) as original_pil:
+                    # A. ICC Profile Preservation
+                    icc_profile = original_pil.info.get("icc_profile")
+                    
+                    # B. EXIF Preservation
+                    # PNG 'eXIf' chunk or JPEG EXIF
+                    exif_bytes = original_pil.info.get("exif")
+                    if not exif_bytes and hasattr(original_pil, 'getexif'):
+                        try:
+                            # getexif().tobytes() is the robust way to get raw EXIF block
+                            exif_dict = original_pil.getexif()
+                            if exif_dict:
+                                exif_bytes = exif_dict.tobytes()
+                        except Exception:
+                            pass
 
-                for k, v in original_pil.info.items():
-                    if k in ["exif", "parameters", "icc_profile", "XML:com.adobe.xmp", "xmp"]:
-                        continue
-                    if isinstance(k, str) and (isinstance(v, str) or isinstance(v, bytes)):
-                        # metadata.add_text(str(k), str(v)) # Handled in the final loop for consistency
-                        info_to_preserve[k] = v
+                    # C. Global Info Preservation (including prompt, workflow, etc.)
+                    # We iterate over all keys in .info and add them to PngInfo
+                    for k, v in original_pil.info.items():
+                        # Skip things we handle separately or internal PIL keys
+                        if k in ["exif", "icc_profile", "photoshop", "adobe", "adobe_transform"]:
+                            continue
+                        
+                        # Special handling for XMP
+                        if k in ["xmp", "XML:com.adobe.xmp"]:
+                            try:
+                                if isinstance(v, bytes):
+                                    metadata.add_text("XML:com.adobe.xmp", v.decode('latin-1'))
+                                else:
+                                    metadata.add_text("XML:com.adobe.xmp", str(v))
+                            except Exception:
+                                pass
+                            continue
 
-
-                # D. EXIF Preservation
-                raw_exif = original_pil.info.get("exif")
-                if not raw_exif and hasattr(original_pil, 'getexif'):
-                    try:
-                        raw_exif = original_pil.getexif().tobytes()
-                    except Exception:
-                        pass
-
-
-                if raw_exif:
-                    # We NO LONGER update Software or UserComment here.
-                    # Just keep the raw bytes.
-                    exif_bytes = raw_exif
-
+                        # General chunk preservation (prompt, workflow, parameters, etc.)
+                        try:
+                            if isinstance(v, bytes):
+                                # If it's bytes, it might be a binary chunk. 
+                                # PNG tEXt/zTXt/iTXt are usually decoded by PIL into strings.
+                                # If it's still bytes, we use latin-1 to preserve raw bytes in a tEXt-compatible way.
+                                metadata.add_text(str(k), v.decode('latin-1'), zip=False)
+                            else:
+                                # v might be a string or a special PIL object like PngImagePlugin.iTXt.
+                                # str(v) correctly returns the text content.
+                                # We use zip=False by default for better compatibility with some viewers (like ComfyUI).
+                                metadata.add_text(str(k), str(v), zip=False)
+                        except Exception as e:
+                            # print(f"[Metadata] Skip chunk {k}: {e}")
+                            pass
 
         except Exception as e:
             print(f"[Metadata] Failed to process original metadata: {e}")
-
-        # 4. Preserve other info markers (XMP etc)
-        for k, v in info_to_preserve.items():
-            try:
-                if isinstance(v, bytes):
-                    metadata.add_text(str(k), v.decode('latin-1'), zip=True)
-                else:
-                    metadata.add_text(str(k), str(v), zip=True)
-            except Exception:
-                pass
-
-        
         # 5. 저장 실행
         pil_image.save(save_path, pnginfo=metadata, exif=exif_bytes, icc_profile=icc_profile, quality=95)
             

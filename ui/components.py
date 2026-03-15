@@ -287,7 +287,6 @@ class FileQueueWidget(QWidget):
         layout.addWidget(self.list_widget)
         
         self.list_widget.itemClicked.connect(self._on_click)
-        self.list_widget.currentItemChanged.connect(self._on_current_item_changed)
         self.btn_add.clicked.connect(self._open_file_dialog)
         self.btn_del_all.clicked.connect(self.list_widget.clear)
         self.btn_del_sel.clicked.connect(self._delete_selected)
@@ -392,13 +391,8 @@ class FileQueueWidget(QWidget):
             self.list_widget.takeItem(self.list_widget.row(item))
 
     def _on_click(self, item):
-        if item is not None:
-            path = item.data(Qt.ItemDataRole.UserRole)
-            self.file_clicked.emit(path)
-
-    def _on_current_item_changed(self, current, previous):
-        if current is not None:
-            self._on_click(current)
+        path = item.data(Qt.ItemDataRole.UserRole)
+        self.file_clicked.emit(path)
 
     def get_all_files(self):
         return [self.list_widget.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.list_widget.count())]

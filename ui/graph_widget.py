@@ -6,7 +6,7 @@ from ui.styles import ModernTheme
 class ScheduleGraphWidget(QWidget):
     def __init__(self):
         super().__init__()
-        self.setMinimumSize(100, 150)
+        self.setMinimumSize(300, 200)
         self.y_values = []
         self.set_theme("dark")
         
